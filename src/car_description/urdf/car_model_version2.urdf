@@ -1,0 +1,271 @@
+<?xml version="1.0"?>
+<robot name="rear_axle_centered_car_2d">
+  <!-- 材料定义：适配二维显示需求 -->
+  <material name="body_transparent">
+    <color rgba="1.0 1.0 1.0 0.3"/>
+  </material>
+  <material name="body_border">
+    <color rgba="0.0 0.0 0.0 1.0"/>
+  </material>
+  <material name="wheel_black">
+    <color rgba="0.0 0.0 0.0 1.0"/>
+  </material>
+  <material name="center_red">
+    <color rgba="1.0 0.0 0.0 1.0"/>
+  </material>
+
+  <!-- 基准坐标系：原点=后轮轴中心 -->
+  <link name="base_link">
+    <!-- 车身透明填充 -->
+    <visual>
+      <origin xyz="1.35 0 0"/>
+      <geometry>
+        <box size="4.5 1.8 0.1"/>
+      </geometry>
+      <material name="body_transparent"/>
+    </visual>
+
+    <!-- 前边框 -->
+    <visual>
+      <origin xyz="3.6 0 0.05"/>
+      <geometry>
+        <box size="0.1 1.8 0.2"/>
+      </geometry>
+      <material name="body_border"/>
+    </visual>
+
+    <!-- 后边框 -->
+    <visual>
+      <origin xyz="-0.9 0 0.05"/>
+      <geometry>
+        <box size="0.1 1.8 0.2"/>
+      </geometry>
+      <material name="body_border"/>
+    </visual>
+
+    <!-- 左边框 -->
+    <visual>
+      <origin xyz="1.35 0.9 0.05"/>
+      <geometry>
+        <box size="4.3 0.1 0.2"/>
+      </geometry>
+      <material name="body_border"/>
+    </visual>
+
+    <!-- 右边框 -->
+    <visual>
+      <origin xyz="1.35 -0.9 0.05"/>
+      <geometry>
+        <box size="4.3 0.1 0.2"/>
+      </geometry>
+      <material name="body_border"/>
+    </visual>
+
+    <collision>
+      <origin xyz="1.35 0 0"/>
+      <geometry>
+        <box size="4.5 1.8 0.1"/>
+      </geometry>
+    </collision>
+
+    <inertial>
+      <origin xyz="1.35 0 0"/>
+      <mass value="1500.0"/>
+      <inertia ixx="3000.0" ixy="0.0" ixz="0.0"
+               iyy="8000.0" iyz="0.0"
+               izz="10000.0"/>
+    </inertial>
+  </link>
+
+  <!-- 后轮轴中心标记 -->
+  <link name="track_center_marker">
+    <visual>
+      <origin xyz="0 0 0.1"/>
+      <geometry>
+        <sphere radius="0.15"/>
+      </geometry>
+      <material name="center_red"/>
+    </visual>
+  </link>
+
+  <!-- 左前轮 -->
+  <link name="front_left_wheel">
+    <visual>
+      <origin xyz="0 0 0" rpy="1.5708 0 0"/>
+      <geometry>
+        <cylinder length="0.2" radius="0.3"/>
+      </geometry>
+      <material name="wheel_black"/>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="1.5708 0 0"/>
+      <geometry>
+        <cylinder length="0.2" radius="0.3"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <origin xyz="0 0 0"/>
+      <mass value="15.0"/>
+      <inertia ixx="0.5" ixy="0.0" ixz="0.0"
+               iyy="0.5" iyz="0.0"
+               izz="0.5"/>
+    </inertial>
+  </link>
+
+  <!-- 右前轮 -->
+  <link name="front_right_wheel">
+    <visual>
+      <origin xyz="0 0 0" rpy="1.5708 0 0"/>
+      <geometry>
+        <cylinder length="0.2" radius="0.3"/>
+      </geometry>
+      <material name="wheel_black"/>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="1.5708 0 0"/>
+      <geometry>
+        <cylinder length="0.2" radius="0.3"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <origin xyz="0 0 0"/>
+      <mass value="15.0"/>
+      <inertia ixx="0.5" ixy="0.0" ixz="0.0"
+               iyy="0.5" iyz="0.0"
+               izz="0.5"/>
+    </inertial>
+  </link>
+
+  <!-- 左后轮 -->
+  <link name="rear_left_wheel">
+    <visual>
+      <origin xyz="0 0 0" rpy="1.5708 0 0"/>
+      <geometry>
+        <cylinder length="0.2" radius="0.3"/>
+      </geometry>
+      <material name="wheel_black"/>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="1.5708 0 0"/>
+      <geometry>
+        <cylinder length="0.2" radius="0.3"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <origin xyz="0 0 0"/>
+      <mass value="15.0"/>
+      <inertia ixx="0.5" ixy="0.0" ixz="0.0"
+               iyy="0.5" iyz="0.0"
+               izz="0.5"/>
+    </inertial>
+  </link>
+
+  <!-- 右后轮 -->
+  <link name="rear_right_wheel">
+    <visual>
+      <origin xyz="0 0 0" rpy="1.5708 0 0"/>
+      <geometry>
+        <cylinder length="0.2" radius="0.3"/>
+      </geometry>
+      <material name="wheel_black"/>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="1.5708 0 0"/>
+      <geometry>
+        <cylinder length="0.2" radius="0.3"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <origin xyz="0 0 0"/>
+      <mass value="15.0"/>
+      <inertia ixx="0.5" ixy="0.0" ixz="0.0"
+               iyy="0.5" iyz="0.0"
+               izz="0.5"/>
+    </inertial>
+  </link>
+
+  <!-- 关节定义 -->
+  <joint name="track_center_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="track_center_marker"/>
+    <origin xyz="0 0 0"/>
+  </joint>
+
+  <joint name="front_left_steering_joint" type="revolute">
+    <parent link="base_link"/>
+    <child link="front_left_wheel"/>
+    <origin xyz="2.7 0.9 -0.05" rpy="0 0 0"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-0.6109" upper="0.6109" effort="200" velocity="5"/>
+  </joint>
+
+  <joint name="front_right_steering_joint" type="revolute">
+    <parent link="base_link"/>
+    <child link="front_right_wheel"/>
+    <origin xyz="2.7 -0.9 -0.05" rpy="0 0 0"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-0.6109" upper="0.6109" effort="200" velocity="5"/>
+  </joint>
+
+  <joint name="rear_left_joint" type="continuous">
+    <parent link="base_link"/>
+    <child link="rear_left_wheel"/>
+    <origin xyz="0 0.9 -0.05" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <limit effort="300" velocity="10"/>
+  </joint>
+
+  <joint name="rear_right_joint" type="continuous">
+    <parent link="base_link"/>
+    <child link="rear_right_wheel"/>
+    <origin xyz="0 -0.9 -0.05" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <limit effort="300" velocity="10"/>
+  </joint>
+
+  <!-- 传动配置 -->
+  <transmission name="rear_left_trans">
+    <type>transmission_interface/SimpleTransmission</type>
+    <joint name="rear_left_joint">
+      <hardwareInterface>hardware_interface/VelocityJointInterface</hardwareInterface>
+    </joint>
+    <actuator name="rear_left_motor">
+      <hardwareInterface>hardware_interface/VelocityJointInterface</hardwareInterface>
+      <mechanicalReduction>1</mechanicalReduction>
+    </actuator>
+  </transmission>
+
+  <transmission name="rear_right_trans">
+    <type>transmission_interface/SimpleTransmission</type>
+    <joint name="rear_right_joint">
+      <hardwareInterface>hardware_interface/VelocityJointInterface</hardwareInterface>
+    </joint>
+    <actuator name="rear_right_motor">
+      <hardwareInterface>hardware_interface/VelocityJointInterface</hardwareInterface>
+      <mechanicalReduction>1</mechanicalReduction>
+    </actuator>
+  </transmission>
+
+  <transmission name="front_left_steering_trans">
+    <type>transmission_interface/SimpleTransmission</type>
+    <joint name="front_left_steering_joint">
+      <hardwareInterface>hardware_interface/PositionJointInterface</hardwareInterface>
+    </joint>
+    <actuator name="front_left_steering_motor">
+      <hardwareInterface>hardware_interface/PositionJointInterface</hardwareInterface>
+      <mechanicalReduction>1</mechanicalReduction>
+    </actuator>
+  </transmission>
+
+  <transmission name="front_right_steering_trans">
+    <type>transmission_interface/SimpleTransmission</type>
+    <joint name="front_right_steering_joint">
+      <hardwareInterface>hardware_interface/PositionJointInterface</hardwareInterface>
+    </joint>
+    <actuator name="front_right_steering_motor">
+      <hardwareInterface>hardware_interface/PositionJointInterface</hardwareInterface>
+      <mechanicalReduction>1</mechanicalReduction>
+    </actuator>
+  </transmission>
+</robot>
+    

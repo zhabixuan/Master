@@ -1,0 +1,39 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>liom_local_planner</name>
+  <version>0.0.1</version>
+  <description>The liom_local_planner package</description>
+  <author>Bai Li</author>
+  <author>Yakun Ouyang</author>
+  <maintainer email="yakun@hnu.edu.cn">Yakun Ouyang</maintainer>
+  <license>LGPLv3</license>
+
+  <!-- 构建工具依赖（必须） -->
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <!-- 构建依赖（编译时需要，与CMake find_package对应） -->
+  <depend>rclcpp</depend>
+  <depend>nav2_costmap_2d</depend>
+  <depend>geometry_msgs</depend>
+  <depend>nav2_core</depend>
+  <depend>nav_msgs</depend>
+  <depend>std_msgs</depend>
+  <depend>pluginlib</depend>
+  <depend>tf2</depend>
+  <depend>tf2_ros</depend>
+  <depend>visualization_msgs</depend>
+  <depend>interactive_markers</depend>
+  <depend>ompl</depend>
+
+  <!-- 测试依赖（可选） -->
+  <test_depend>ament_lint_auto</test_depend>
+  <test_depend>ament_lint_common</test_depend>
+  <!-- 若添加gtest，需加：<test_depend>ament_cmake_gtest</test_depend> -->
+
+  <export>
+    <build_type>ament_cmake</build_type>
+    <!--
+    <nav_core plugin="${prefix}/lp_plugin.xml"/>
+    -->
+  </export>
+</package>

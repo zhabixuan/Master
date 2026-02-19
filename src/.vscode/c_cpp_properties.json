@@ -1,0 +1,25 @@
+{
+  "configurations": [
+    {
+      "browse": {
+        "databaseFilename": "${workspaceFolder}/.vscode/browse.vc.db",
+        "limitSymbolsToIncludedHeaders": false
+      },
+      "includePath": [
+        "/opt/ros/humble/include/**",
+        "/home/xuan/Desktop/master_thesis/trajectory/src/my_nav2_bringup/include/**",
+        "/home/xuan/Desktop/master_thesis/trajectory/src/path_searching/include/**",
+        "/home/xuan/Desktop/master_thesis/trajectory/src/planner/include/**",
+        "/home/xuan/Desktop/master_thesis/trajectory/src/simulator/include/**",
+        "/home/xuan/Desktop/master_thesis/trajectory/src/liom_local_planner/include/**",
+        "/usr/include/**"
+      ],
+      "name": "ros2",
+      "intelliSenseMode": "gcc-x64",
+      "compilerPath": "/usr/bin/gcc",
+      "cStandard": "gnu11",
+      "cppStandard": "c++17"
+    }
+  ],
+  "version": 4
+}

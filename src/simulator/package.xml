@@ -1,0 +1,33 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>simulator</name>
+  <version>0.0.0</version>
+  <description>a simple simulator for navigation</description>
+  <maintainer email="2045360004@qq.com">xuan</maintainer>
+  <license>MIT</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <depend>rclcpp</depend>
+  <depend>rosgraph_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>tf2_geometry_msgs</depend>
+  <depend>nav_msgs</depend>
+  <depend>nav2_msgs</depend>
+  <depend>rclcpp_action</depend>
+  <depend>tf2_ros</depend>
+
+  <!-- 新增：整合汽车模型所需的依赖 -->
+  <depend>car_description</depend>          <!-- 依赖URDF所在的包 -->
+  <depend>joint_state_publisher</depend>    <!-- 依赖关节状态发布节点 -->
+  <depend>robot_state_publisher</depend>    <!-- 依赖机器人状态发布节点 -->
+  <depend>urdf</depend>                     <!-- 依赖URDF解析库 -->
+
+  <test_depend>ament_lint_auto</test_depend>
+  <test_depend>ament_lint_common</test_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

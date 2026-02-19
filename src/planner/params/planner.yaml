@@ -1,0 +1,78 @@
+planner_server:
+  ros__parameters:
+    expected_planner_frequency: 20.0
+    use_sim_time: True
+    planner_plugins: ["custom"]
+    custom:
+      plugin: "planner/CustomPlanner"
+      tolerance: 0.5  # 保留：匹配车身尺寸，避免微小偏差导致规划失败
+      allow_unknown: true  # 保留：适配复杂泊车场景的未知区域
+      max_iterations: 1000000  # 保留：复杂泊车需足够迭代次数
+      max_planning_time: 5.0  # 保留：平衡规划精度与耗时
+      analytic_expansion_ratio: 3.0  # 调整：从3.5降至3.0，减少冗余探索，提升效率
+      analytic_expansion_max_length: 5.0  # 新增：匹配车身长度（4.5m），避免路径过碎
+      minimum_turning_radius: 3.856
+      reverse_penalty: 1.5  # 关键调整：原2.5过高，抑制必要倒车；1.5既优先前进，又允许泊车掉头
+      change_penalty: 1.0  # 关键调整：原0.15过低，导致频繁变向；1.0减少无意义模式切换，路径更平滑
+      non_straight_penalty: 1.25  # 保留：轻微惩罚转向，优先直线行驶
+      cost_penalty: 2.0  # 保留：规避高成本障碍（如路缘、其他车辆）
+      retrospective_penalty: 0.025  # 保留：允许必要回溯，适配狭窄泊车空间
+      rotation_penalty: 1.5  # 调整：原5.0过高，过度规避旋转；1.5平衡旋转平滑性与效率
+      cache_obstacle_heuristic: true  # 保留：缓存启发式，加速复杂场景规划
+      allow_reverse_expansion: true  # 保留：核心参数，确保泊车场景可倒车扩展
+      smooth_path: false  # 保留：后续自行优化路径，符合需求
+      motion_model_for_search: "REEDS_SHEPP"  # 保留：启用倒车功能的核心模型
+      angle_quantization_bins: 72  # 新增：每5°一个角度间隔（360/72=5），覆盖±35°转向范围，兼顾精度与效率
+      #downsample_costmap: true  # 新增：开启成本地图降采样，减少计算量
+      #downsampling_factor: 2  # 新增：与costmap分辨率匹配，降低处理压力
+
+      #footprint_model:
+      #  type: "polygon"
+
+global_costmap:
+  global_costmap:
+    ros__parameters:
+      update_frequency: 1.0  # 保留：全局地图无需高频更新
+      publish_frequency: 1.0  # 保留：平衡实时性与资源消耗
+      global_frame: map  # 保留：标准全局坐标系
+      robot_base_frame: base_link  # 保留：与URDF基准坐标系一致
+      use_sim_time: True  # 保留：仿真场景必备
+      #robot_radius: 0.9  # 关键调整：原0.22过小（仅对应车轮半径），正确值=车身半宽（URDF车身宽度1.8m），避免碰撞
+      footprint: "[[-0.929, -0.971], [-0.929, 0.971], [3.76, 0.971], [3.76, -0.971]]"  # 车辆轮廓多边形坐标
+      resolution: 0.05  # 保留：高精度地图，但配合降采样因子2，实际处理分辨率0.1m，兼顾细节与效率
+      track_unknown_space: true  # 保留：适配泊车场景未知区域
+      plugins: ["static_layer", "obstacle_layer", "inflation_layer"]  # 保留：标准图层组合
+      
+      static_layer:
+        plugin: "nav2_costmap_2d::StaticLayer"
+        map_subscribe_transient_local: True  # 保留：确保静态地图正确订阅
+        
+      obstacle_layer:
+        plugin: "nav2_costmap_2d::ObstacleLayer"
+        enabled: True
+        observation_sources: scan
+        scan:
+          topic: /scan
+          max_obstacle_height: 0.5  # 调整：原2.0过高，过滤地面以上无关障碍（如天花板），聚焦车身高度（约0.1m）
+          clearing: True
+          marking: True
+          data_type: "LaserScan"
+          raytrace_max_range: 3.0  # 保留：匹配激光扫描范围
+          raytrace_min_range: 0.0
+          obstacle_max_range: 2.5  # 保留：确保障碍检测精度
+          obstacle_min_range: 0.0
+          
+      inflation_layer:
+        plugin: "nav2_costmap_2d::InflationLayer"
+        cost_scaling_factor: 3.0  # 保留：平衡障碍规避与路径紧凑性
+        inflation_radius: 0.95  # 关键调整：原0.55过小，正确值=车身半宽（0.9m）+0.05m安全余量，确保车身不碰障碍
+      
+      always_send_full_costmap: True  # 保留：确保全局地图完整传输
+
+  global_costmap_client:
+    ros__parameters:
+      use_sim_time: True
+      
+  global_costmap_rclcpp_node:
+    ros__parameters:
+      use_sim_time: True
