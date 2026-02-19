@@ -1,4 +1,5 @@
 # ROS
 install/
 log/
+build/
 .vscode/
