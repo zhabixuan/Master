@@ -1,5 +1,6 @@
 #ifndef LIOM_LOCAL_PLANNER_OPTIMIZER_INTERFACE_H
 #define LIOM_LOCAL_PLANNER_OPTIMIZER_INTERFACE_H
+
 #include <vector>
 #include <array>
 #include <tuple>
@@ -7,13 +8,15 @@
 #include <memory>
 #include <Eigen/Dense>
 
-#include "liom_local_planner/math/pose.h"
+#include "common_math/pose.h"
 #include "liom_local_planner/planner_config.h"
 #include "liom_local_planner/environment.h"
 
 namespace liom_local_planner {
 
-constexpr int NVar = 7;
+namespace math = common::math;
+
+constexpr int NVar = 7; // x, y, theta, v, phi, a, omega
 
 using TrajectoryPointVector = Eigen::Matrix<double, NVar, 1>;
 

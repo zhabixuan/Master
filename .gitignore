@@ -3,3 +3,6 @@ install/
 log/
 build/
 .vscode/
+benchmark.png
+benchmark.txt
+CLAUDE_CAPABILITIES.md

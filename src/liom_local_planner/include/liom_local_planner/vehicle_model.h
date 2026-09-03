@@ -1,17 +1,23 @@
 //
 // Created by yenkn on 23-1-20.
 //
-#include "math/pose.h"
-#include "math/box2d.h"
-#include <tuple>
-
 #ifndef LIOM_LOCAL_PLANNER_VEHICLE_MODEL_H
 #define LIOM_LOCAL_PLANNER_VEHICLE_MODEL_H
 
+#include "common_math/pose.h"
+#include "common_math/box2d.h"
+#include <tuple>
+
 namespace liom_local_planner {
+
+namespace math = common::math;
 
 class VehicleModel {
 public:
+  VehicleModel() {
+    InitializeDiscs();
+  }
+  ~VehicleModel() = default;
   /**
    * L_F, front hang length of the ego vehicle (m)
    */
@@ -31,6 +37,7 @@ public:
    * L_B, width of the ego vehicle (m)
    */
   double width = 1.942;
+  double length = 4.689;
 
   /**
    * Upper bound of v(t) (m/s)
@@ -46,6 +53,8 @@ public:
    * Lower and upper bounds of a(t) (m/s^2)
    */
   double max_acceleration = 1.0;
+
+  double min_acceleration = -1.0;
 
   /**
    * Upper bound of |\phi(t)| (rad)
@@ -64,6 +73,8 @@ public:
 
   double disc_radius;
   std::vector<double> disc_coefficients;
+
+  
 
   void InitializeDiscs() {
     double length = wheel_base + rear_hang_length + front_hang_length;
@@ -85,10 +96,10 @@ public:
     return result;
   }
 
-  math::Box2d GenerateBox(const math::Pose &pose) const {
+  common::math::Box2d GenerateBox(const common::math::Pose &pose) const {
     double length = (wheel_base + rear_hang_length + front_hang_length);
     double distance = length / 2 - rear_hang_length;
-    return {pose.extend(distance), pose.theta(), length, width};
+    return {pose.extend(distance), pose.theta, length, width};
   }
 
 };

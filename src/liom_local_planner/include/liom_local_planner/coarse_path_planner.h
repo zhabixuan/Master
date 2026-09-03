@@ -1,7 +1,9 @@
+#ifndef LIOM_LOCAL_PLANNER_COARSE_PATH_PLANNER_H
+#define LIOM_LOCAL_PLANNER_COARSE_PATH_PLANNER_H
 
 #include "liom_local_planner/environment.h"
 #include "liom_local_planner/planner_config.h"
-#include "liom_local_planner/math/pose.h"
+#include "common_math/pose.h"
 
 #include <array>
 #include <vector>
@@ -10,10 +12,9 @@
 
 #include <assert.h>
 
-#ifndef LIOM_LOCAL_PLANNER_COARSE_PATH_PLANNER_H
-#define LIOM_LOCAL_PLANNER_COARSE_PATH_PLANNER_H
-
 namespace liom_local_planner {
+
+namespace math = common::math;
 
 class CoarsePathPlanner {
 public:
@@ -29,23 +30,28 @@ private:
     static constexpr uint64_t undefined_index = std::numeric_limits<uint64_t>::max();
     
     struct Node3d {
-        bool is_forward, is_closed = false;
+        bool is_forward = true, is_closed = false;
         math::Pose pose;
-        double steering;
+        double steering = 0.0;
 
         Node3d() = default;
 
         Node3d(math::Pose ps, math::Vec2d origin, const PlannerConfig& config) : pose(ps) {
-            x_grid = static_cast<int32_t>(floor((ps.x() - origin.x()) / config.xy_resolution));
-            y_grid = static_cast<int32_t>(floor((ps.y() - origin.y()) / config.xy_resolution));
-            theta_grid = static_cast<int32_t>(floor((ps.theta() - (-M_PI)) / config.theta_resolution));
+            x_grid = static_cast<int32_t>(floor((ps.x - origin.x()) / config.xy_resolution));
+            y_grid = static_cast<int32_t>(floor((ps.y - origin.y()) / config.xy_resolution));
+            theta_grid = static_cast<int32_t>(floor((ps.theta - (-M_PI)) / config.theta_resolution));
 
             assert(abs(x_grid) < 0x00FFFFFF && abs(y_grid) < 0x00FFFFFF && abs(theta_grid) < 0x00003FFF);
 
             // 1 (x_sign_bit) + 24 (x_grid_bit) + 1 (y_sign_bit) + 24 (y_grid_bit) + 14 (theta_grid_bit)
-            index |= (static_cast<uint64_t>(x_grid) & 0x80000000) << 63;
+            // index |= (static_cast<uint64_t>(x_grid) & 0x80000000) << 63;
+            // index |= (static_cast<uint64_t>(x_grid) & 0x00FFFFFF) << 39;
+            // index |= (static_cast<uint64_t>(y_grid) & 0x80000000) << 38;
+            // index |= (static_cast<uint64_t>(y_grid) & 0x00FFFFFF) << 14;
+            // index |= static_cast<uint64_t>(theta_grid) & 0x00003FFF;
+            index |= (static_cast<uint64_t>(x_grid) & 0x80000000) << 32;
             index |= (static_cast<uint64_t>(x_grid) & 0x00FFFFFF) << 39;
-            index |= (static_cast<uint64_t>(y_grid) & 0x80000000) << 38;
+            index |= (static_cast<uint64_t>(y_grid) & 0x80000000) << 7;
             index |= (static_cast<uint64_t>(y_grid) & 0x00FFFFFF) << 14;
             index |= static_cast<uint64_t>(theta_grid) & 0x00003FFF;
         }
@@ -67,8 +73,8 @@ private:
         bool is_closed = false;
 
         Node2d(math::Pose ps, math::Vec2d origin, const PlannerConfig& config) {
-            x_grid = static_cast<int32_t>(floor((ps.x() - origin.x()) / config.grid_xy_resolution));
-            y_grid = static_cast<int32_t>(floor((ps.y() - origin.y()) / config.grid_xy_resolution));
+            x_grid = static_cast<int32_t>(floor((ps.x - origin.x()) / config.grid_xy_resolution));
+            y_grid = static_cast<int32_t>(floor((ps.y - origin.y()) / config.grid_xy_resolution));
 
             assert(abs(x_grid) < 0xFFFFFFFF && abs(y_grid) < 0xFFFFFFFF);
             index = (static_cast<uint64_t>(x_grid) << 32) | static_cast<uint32_t>(y_grid);
@@ -78,7 +84,7 @@ private:
             index = (static_cast<uint64_t>(x_grd) << 32) | static_cast<uint32_t>(y_grd);
         }
 
-        inline math::AABox2d GenerateBox(math:: Vec2d origin, const PlannerConfig& config) const {
+        inline math::AABox2d GenerateBox(math::Vec2d origin, const PlannerConfig& config) const {
             math::Vec2d corner(origin.x() + config.grid_xy_resolution * x_grid, origin.y() + config.grid_xy_resolution * y_grid);
             return { corner, config.vehicle.disc_radius * 2, config.vehicle.disc_radius * 2 };
         }
@@ -92,7 +98,7 @@ private:
 
     struct cost_cmp {
         bool operator()(const std::pair<uint64_t, double>& left, const std::pair<uint64_t, double>& right) const {
-            return left.second >= right.second;
+            return left.second > right.second;
         }
     };
 

@@ -1,7 +1,7 @@
 #pragma once
 
-#include "liom_local_planner/math/vec2d.h"
-#include "liom_local_planner/math/polygon2d.h"
+#include "common_math/vec2d.h"
+#include "common_math/polygon2d.h"
 
 #include <mutex>
 //#include <ros/ros.h>
@@ -13,6 +13,9 @@
 #include "color.h"
 
 namespace liom_local_planner {
+
+namespace math = common::math;
+
 namespace visualization {
 
 using math::Vec2d;

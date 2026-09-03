@@ -1,14 +1,20 @@
-#pragma once
+//#pragma once
+
+#ifndef LIOM_LOCAL_PLANNER__PLANNER_CONFIG_H
+#define LIOM_LOCAL_PLANNER__PLANNER_CONFIG_H
+
 #include "vehicle_model.h"
 
 namespace liom_local_planner {
+
+namespace math = common::math;
 
 struct PlannerConfig {
    double xy_resolution = 0.5;
    double theta_resolution = 0.1;
    double step_size = 0.2;
    int next_node_num = 6;
-   double grid_xy_resolution = 1.0;
+   double grid_xy_resolution = 0.5;
    double forward_penalty = 0.5;
    double backward_penalty = 1.0;
    double gear_change_penalty = 5.0;
@@ -36,6 +42,11 @@ struct PlannerConfig {
   double corridor_incremental_limit = 20.0;
 
   /**
+   * search resolution for initial feasible position in corridor generation
+   */
+  double corridor_search_resolution = 0.05;
+
+  /**
    * Weighting parameter for control input acceleration
    */
   double opti_w_a = 1.0;
@@ -46,6 +57,7 @@ struct PlannerConfig {
   double opti_w_omega = 1.0;
 
   int opti_inner_iter_max = 100;
+  //int opti_inner_iter_max = 1000;
 
   /**
    * Initial value of weighting parameter w_penalty
@@ -61,3 +73,5 @@ struct PlannerConfig {
 };
 
 }
+
+#endif

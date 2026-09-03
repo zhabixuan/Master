@@ -3,7 +3,7 @@
 #include "liom_local_planner/time.h"
 #include "liom_local_planner/liom_local_planner.h"
 #include "liom_local_planner/lightweight_nlp_problem.h"
-#include "liom_local_planner/math/math_utils.h"
+#include "common_math/math_utils.h"
 #include "liom_local_planner/visualization/plot.h"
 
 namespace liom_local_planner {
@@ -72,6 +72,8 @@ bool LiomLocalPlanner::CheckGuessFeasibility(const FullStates &guess) {
 
 bool LiomLocalPlanner::Plan(const FullStates &prev_sol, const TrajectoryPoint &start, const TrajectoryPoint &goal, FullStates &result) {
   rclcpp::Logger logger = rclcpp::get_logger("liom_local_planner");
+  visualization::Clear("Corridor 0");
+  visualization::Clear("Corridor 1");
   FullStates guess = StitchPreviousSolution(prev_sol, start);
   if(!CheckGuessFeasibility(guess)) {
     std::vector<math::Pose> initial_path;
@@ -81,11 +83,15 @@ bool LiomLocalPlanner::Plan(const FullStates &prev_sol, const TrajectoryPoint &s
       return false;
     }
     guess = GenerateGuessFromPath(initial_path, start);
+    // if (!CheckGuessFeasibility(guess)) {
+    //   RCLCPP_ERROR(logger, "interpolated guess has collision!");
+    //   return false;
+    // }
     RCLCPP_INFO(logger, "coarse path generation time: %f", GetCurrentTimestamp() - st);
 
     std::vector<double> xs, ys;
     for(auto &pose: initial_path) {
-      xs.push_back(pose.x()); ys.push_back(pose.y());
+      xs.push_back(pose.x); ys.push_back(pose.y);
     }
 
     RCLCPP_INFO(logger, "Calling visualization::Plot...");
@@ -107,7 +113,8 @@ bool LiomLocalPlanner::Plan(const FullStates &prev_sol, const TrajectoryPoint &s
 
     for(int j = 0; j < config_->vehicle.n_disc; j++) {
       math::AABox2d box;
-      if (!env_->GenerateCorridorBox(0.0, disc_pos[j*2], disc_pos[j*2+1], config_->vehicle.disc_radius, box)) {
+      //if (!env_->GenerateCorridorBox(0.0, disc_pos[j*2], disc_pos[j*2+1], config_->vehicle.disc_radius, box)) {
+      if (!env_->GenerateCorridorBox(0.0, disc_pos[j*2], disc_pos[j*2+1], guess.states[i].theta, config_->vehicle.disc_radius, box)) {
         RCLCPP_ERROR(logger, "%d th corridor box indexed at %zu generation failed!", j, i);
         return false;
       }
@@ -141,20 +148,25 @@ bool LiomLocalPlanner::Plan(const FullStates &prev_sol, const TrajectoryPoint &s
 }
 
 FullStates LiomLocalPlanner::ResamplePath(const std::vector<math::Pose> &path) const {
-  std::vector<int> gears(path.size());
+  std::vector<bool> gears(path.size());
   std::vector<double> stations(path.size(), 0);
 
-  for(size_t i = 1; i < path.size(); i++) {
-    double tracking_angle = atan2(path[i].y() - path[i-1].y(), path[i].x() - path[i-1].x());
-    bool gear = std::abs(math::NormalizeAngle(tracking_angle - path[i].theta())) < M_PI_2;
-    gears[i] = gear ? 1 : -1;
+  for(size_t i = 0; i < path.size() - 1; i++) {
+    double heading_angle = path[i].theta;
+    double tracking_angle = std::atan2(path[i + 1].y - path[i].y, path[i + 1].x - path[i].x);
+    gears[i] = std::abs(math::NormalizeAngle(tracking_angle - heading_angle)) < M_PI_2;
+    //gears[i] = gear ? 1 : -1;
 
-    stations[i] = stations[i-1] + path[i].DistanceTo(path[i-1]);
+    stations[i + 1] = stations[i] + path[i + 1].DistanceTo(path[i]);
   }
 
-  if(gears.size() > 1) {
-    gears[0] = gears[1];
+  if (gears.size() > 1) {
+    gears.back() = gears[gears.size() - 2];
   }
+
+  // if(gears.size() > 1) {
+  //   gears[0] = gears[1];
+  // }
 
   std::vector<double> time_profile(gears.size());
   size_t last_idx = 0;
@@ -162,7 +174,8 @@ FullStates LiomLocalPlanner::ResamplePath(const std::vector<math::Pose> &path) c
   for(size_t i = 0; i < gears.size(); i++) {
     if(i == gears.size() - 1 || gears[i+1] != gears[i]) {
       std::vector<double> station_segment;
-      std::copy_n(stations.begin(), i - last_idx + 1, std::back_inserter(station_segment));
+      // 若 last_idx = 2, i = 4，则复制索引 2, 3, 4 共 3 个元素。
+      std::copy_n(stations.begin() + last_idx, i - last_idx + 1, std::back_inserter(station_segment));
 
       auto profile = GenerateOptimalTimeProfileSegment(station_segment, start_time);
       std::copy(profile.begin(), profile.end(), std::next(time_profile.begin(), last_idx));
@@ -176,9 +189,9 @@ FullStates LiomLocalPlanner::ResamplePath(const std::vector<math::Pose> &path) c
 
   std::vector<double> prev_x(path.size()), prev_y(path.size()), prev_theta(path.size());
   for(size_t i = 0; i < path.size(); i++) {
-    prev_x[i] = path[i].x();
-    prev_y[i] = path[i].y();
-    prev_theta[i] = path[i].theta();
+    prev_x[i] = path[i].x;
+    prev_y[i] = path[i].y;
+    prev_theta[i] = path[i].theta;
   }
 
   FullStates result;
@@ -211,49 +224,100 @@ FullStates LiomLocalPlanner::ResamplePath(const std::vector<math::Pose> &path) c
 }
 
 std::vector<double> LiomLocalPlanner::GenerateOptimalTimeProfileSegment(const std::vector<double> &stations, double start_time) const {
-  double max_accel = config_->vehicle.max_acceleration; double max_decel = -config_->vehicle.max_acceleration;
-  double max_velocity = config_->vehicle.max_velocity; double min_velocity = -config_->vehicle.max_velocity;
+  double max_accel = config_->vehicle.max_acceleration; // double max_decel = -config_->vehicle.max_acceleration;
+  double max_velocity = config_->vehicle.max_velocity; // double min_velocity = -config_->vehicle.max_velocity;
 
-  int accel_idx = 0, decel_idx = stations.size()-1;
+  int N = stations.size();
+  if (N < 2) {
+    return {start_time};
+  } 
+
+  double length = stations.back() - stations.front();
+  double v_peak = std::sqrt(max_accel * length);
+
+  if (v_peak > max_velocity) {
+    v_peak = max_velocity;
+  }
+
+  int accel_idx = 0, decel_idx = N - 1;
   double vi = 0.0;
-  std::vector<double> profile(stations.size());
-  for (int i = 0; i < stations.size()-1; i++) {
+  std::vector<double> profile(N);
+  for (int i = 0; i < N - 1; ++i) {
     double ds = stations[i+1] - stations[i];
-
     profile[i] = vi;
-    vi = sqrt(vi * vi + 2 * max_accel * ds);
-    vi = std::min(max_velocity, std::max(min_velocity, vi));
-
-    if(vi >= max_velocity) {
+    vi = std::sqrt(vi * vi + 2 * max_accel * ds);
+    if (vi >= v_peak) {
       accel_idx = i+1;
       break;
     }
   }
 
   vi = 0.0;
-  for (int i = stations.size()-1; i > accel_idx; i--) {
+  for (int i = N - 1; i >= accel_idx; --i) {
     double ds = stations[i] - stations[i-1];
     profile[i] = vi;
-    vi = sqrt(vi * vi - 2 * max_decel * ds);
-    vi = std::min(max_velocity, std::max(min_velocity, vi));
-
-    if(vi >= max_velocity) {
+    vi = std::sqrt(vi * vi + 2 * max_accel * ds);
+    if (vi >= v_peak) {
       decel_idx = i;
       break;
     }
   }
+  
+  if (accel_idx < decel_idx) {
+    std::fill(std::next(profile.begin(), accel_idx), std::next(profile.begin(), decel_idx), v_peak);
+  }
 
-  std::fill(std::next(profile.begin(), accel_idx), std::next(profile.begin(), decel_idx), max_velocity);
+  std::vector<double> time_profile(N, start_time);
 
-  std::vector<double> time_profile(stations.size(), start_time);
-  for(size_t i = 1; i < stations.size(); i++) {
-    if(profile[i] < 1e-6) {
+  for (size_t i = 1; i < N; ++i) {
+    double v = (profile[i] + profile[i-1]) / 2.0; // 使用平均速度计算时间增量
+    if (v < 1e-6) { // 避免除以零
       time_profile[i] = time_profile[i-1];
-      continue;
+    } else {
+      time_profile[i] = time_profile[i-1] + (stations[i] - stations[i-1]) / v;
     }
-    time_profile[i] = time_profile[i-1] + (stations[i] - stations[i-1]) / profile[i];
   }
   return time_profile;
+  // int accel_idx = 0, decel_idx = stations.size()-1;
+  // double vi = 0.0;
+  // std::vector<double> profile(stations.size());
+  // for (int i = 0; i < stations.size()-1; i++) {
+  //   double ds = stations[i+1] - stations[i];
+
+  //   profile[i] = vi;
+  //   vi = sqrt(vi * vi + 2 * max_accel * ds);
+  //   vi = std::min(max_velocity, std::max(min_velocity, vi));
+
+  //   if(vi >= max_velocity) {
+  //     accel_idx = i+1;
+  //     break;
+  //   }
+  // }
+
+  // vi = 0.0;
+  // for (int i = stations.size()-1; i > accel_idx; i--) {
+  //   double ds = stations[i] - stations[i-1];
+  //   profile[i] = vi;
+  //   vi = sqrt(vi * vi - 2 * max_decel * ds);
+  //   vi = std::min(max_velocity, std::max(min_velocity, vi));
+
+  //   if(vi >= max_velocity) {
+  //     decel_idx = i;
+  //     break;
+  //   }
+  // }
+
+  //std::fill(std::next(profile.begin(), accel_idx), std::next(profile.begin(), decel_idx), max_velocity);
+
+  // std::vector<double> time_profile(stations.size(), start_time);
+  // for(size_t i = 1; i < stations.size(); i++) {
+  //   if(profile[i] < 1e-6) {
+  //     time_profile[i] = time_profile[i-1];
+  //     continue;
+  //   }
+  //   time_profile[i] = time_profile[i-1] + (stations[i] - stations[i-1]) / profile[i];
+  // }
+  // return time_profile;
 }
 
 

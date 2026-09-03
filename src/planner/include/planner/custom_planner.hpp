@@ -5,10 +5,28 @@
 #include <vector>
 #include <string>
 
-#include "path_searching/a_star.hpp"
-#include "path_searching/smoother.hpp"
-#include "path_searching/utils.hpp"
-#include "path_searching/costmap_downsampler.hpp"
+// #include "trajectory_planner/a_star.hpp"
+// //#include "trajectory_planner/smoother.hpp"
+// #include "trajectory_planner/utils.hpp"
+// #include "trajectory_planner/costmap_downsampler.hpp"
+#include "hybrid_Astar/a_star.hpp"
+//#include "hybrid_Astar/smoother.hpp"
+#include "hybrid_Astar/utils.hpp"
+#include "hybrid_Astar/costmap_downsampler.hpp"
+
+// liom
+//#include "liom_local_planner/coarse_path_planner.h"
+#include "common_math/math_utils.h"
+#include "liom_local_planner/time.h"
+#include "liom_local_planner/visualization/plot.h"
+#include "liom_local_planner/environment.h"
+#include "liom_local_planner/optimizer_interface.h"
+#include "liom_local_planner/planner_config.h"
+#include "liom_local_planner/liom_local_planner.h"
+#include "liom_local_planner/lightweight_nlp_problem.h"
+
+#include "liom_local_planner/path_planner.h"
+
 #include "nav_msgs/msg/occupancy_grid.hpp"
 #include "nav2_core/global_planner.hpp"
 #include "nav_msgs/msg/path.hpp"
@@ -72,6 +90,27 @@ public:
     const geometry_msgs::msg::PoseStamped & start,
     const geometry_msgs::msg::PoseStamped & goal) override;
 
+  bool coarsePlan(
+    const common::math::Pose & start,
+    const common::math::Pose & goal,
+    std::vector<common::math::Pose> & path);
+
+  bool liomPlan(const liom_local_planner::FullStates &prev_sol, 
+  const liom_local_planner::TrajectoryPoint &start, 
+  const liom_local_planner::TrajectoryPoint &goal, 
+  liom_local_planner::FullStates &result);
+
+  /**
+   * @brief 基于弧长的路径插值
+   * @param solution 优化后的轨迹（稀疏状态点）
+   * @param dt 时间步长（秒），默认 0.01 秒
+   * @return 稠密的路径点序列
+   */
+  void interpolatePathByTime(
+    const liom_local_planner::FullStates& solution,
+    std::vector<liom_local_planner::TrajectoryPoint>& interpolated_states,
+    double dt = 0.05);
+
 protected:
   /**
    * @brief Callback executed when a paramter change is detected
@@ -80,14 +119,16 @@ protected:
   rcl_interfaces::msg::SetParametersResult
   dynamicParametersCallback(std::vector<rclcpp::Parameter> parameters);
 
-  std::unique_ptr<path_searching::AStarAlgorithm<path_searching::NodeHybrid>> _a_star;
-  path_searching::GridCollisionChecker _collision_checker;
-  std::unique_ptr<path_searching::Smoother> _smoother;
+  std::unique_ptr<hybrid_Astar::AStarAlgorithm<hybrid_Astar::NodeHybrid>> _a_star;
+  std::unique_ptr<liom_local_planner::LiomLocalPlanner> _liom_local_planner;
+  //std::unique_ptr<liom_local_planner::LiomLocalPlanner> _liom_local_planner;
+  hybrid_Astar::GridCollisionChecker _collision_checker;
+  //std::unique_ptr<hybrid_Astar::Smoother> _smoother;
   rclcpp::Clock::SharedPtr _clock;
   rclcpp::Logger _logger{rclcpp::get_logger("SmacPlannerHybrid")};
   nav2_costmap_2d::Costmap2D * _costmap;
   std::shared_ptr<nav2_costmap_2d::Costmap2DROS> _costmap_ros;
-  std::unique_ptr<path_searching::CostmapDownsampler> _costmap_downsampler;
+  std::unique_ptr<hybrid_Astar::CostmapDownsampler> _costmap_downsampler;
   std::string _global_frame, _name;
   float _lookup_table_dim;
   float _tolerance;
@@ -98,18 +139,22 @@ protected:
   bool _allow_unknown;
   int _max_iterations;
   int _max_on_approach_iterations;
-  path_searching::SearchInfo _search_info;
+  hybrid_Astar::SearchInfo _search_info;
   double _max_planning_time;
   double _lookup_table_size;
   double _minimum_turning_radius_global_coords;
   std::string _motion_model_for_search;
-  path_searching::MotionModel _motion_model;
+  hybrid_Astar::MotionModel _motion_model;
   rclcpp_lifecycle::LifecyclePublisher<nav_msgs::msg::Path>::SharedPtr _raw_plan_publisher;
   std::mutex _mutex;
   rclcpp_lifecycle::LifecycleNode::WeakPtr _node;
 
   // Dynamic parameters handler
   rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr _dyn_params_handler;
+
+
+  std::shared_ptr<liom_local_planner::PlannerConfig> planner_config_;
+  std::shared_ptr<liom_local_planner::Environment> env_;
 };
 
 }  // namespace planner

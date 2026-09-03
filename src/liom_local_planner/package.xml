@@ -24,6 +24,9 @@
   <depend>visualization_msgs</depend>
   <depend>interactive_markers</depend>
   <depend>ompl</depend>
+  <depend>boost</depend>
+  <depend>common_math</depend>
+  <depend>hybrid_Astar</depend>
 
   <!-- 测试依赖（可选） -->
   <test_depend>ament_lint_auto</test_depend>

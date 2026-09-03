@@ -1,6 +1,6 @@
 #include "liom_local_planner/liom_local_planner_ros.h"
 #include "liom_local_planner/visualization/plot.h"
-#include "liom_local_planner/math/math_utils.h"
+#include "common_math/math_utils.h"
 
 #include <tf2/utils.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>

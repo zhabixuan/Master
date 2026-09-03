@@ -30,9 +30,11 @@
 
 // 您的算法核心
 #include "liom_local_planner/liom_local_planner.h"
-#include "liom_local_planner/math/math_utils.h"
+#include "common_math/math_utils.h"
 
 namespace liom_local_planner {
+
+namespace math = common::math;
 
 struct LiomLocalPlannerROSConfig {
   double goal_xy_tolerance = 0.5;

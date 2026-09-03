@@ -29,6 +29,9 @@ find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(visualization_msgs REQUIRED)
 find_package(interactive_markers REQUIRED)  # ROS2需确保该包已安装（ros-humble-interactive-markers）
+find_package(Boost REQUIRED)
+find_package(common_math REQUIRED)
+find_package(hybrid_Astar REQUIRED)
 
 # 系统依赖（OMPL）
 find_package(ompl REQUIRED)
@@ -41,18 +44,19 @@ pkg_check_modules(ADOLC REQUIRED adolc)
 # ========== 库编译 ==========
 # 声明C++库（替代catkin的add_library）
 add_library(${PROJECT_NAME} SHARED
-  src/liom_local_planner_ros.cpp
+  #src/liom_local_planner_ros.cpp
   src/lightweight_nlp_problem.cpp
-  src/math/aabox2d.cpp
-  src/math/box2d.cpp
-  src/math/line_segment2d.cpp
-  src/math/math_utils.cpp
-  src/math/polygon2d.cpp
-  src/math/vec2d.cpp
+  #src/math/aabox2d.cpp
+  #src/math/box2d.cpp
+  #src/math/line_segment2d.cpp
+  #src/math/math_utils.cpp
+  #src/math/polygon2d.cpp
+  #src/math/vec2d.cpp
   src/visualization/color.cpp
   src/visualization/plot.cpp
   src/liom_local_planner.cpp
-  src/coarse_path_planner.cpp
+  #src/coarse_path_planner.cpp
+  src/path_planner.cpp
   src/environment.cpp
 )
 
@@ -69,6 +73,8 @@ ament_target_dependencies(${PROJECT_NAME}
   tf2_ros
   visualization_msgs
   interactive_markers
+  common_math
+  hybrid_Astar
 )
 
 # 链接系统库（OMPL/IPOPT/ADOLC）
@@ -76,6 +82,7 @@ target_link_libraries(${PROJECT_NAME}
   ${OMPL_LIBRARIES}
   ${IPOPT_LIBRARIES}
   ${ADOLC_LIBRARIES}
+  Boost::boost
 )
 
 # 头文件路径
@@ -86,10 +93,11 @@ target_include_directories(${PROJECT_NAME}
     ${OMPL_INCLUDE_DIRS}
     ${IPOPT_INCLUDE_DIRS}
     ${ADOLC_INCLUDE_DIRS}
+    ${Boost_INCLUDE_DIRS}
 )
 
-add_executable(liom_test_node src/liom_test_node.cpp)
-target_link_libraries(liom_test_node ${PROJECT_NAME})
+#add_executable(liom_test_node src/liom_test_node.cpp)
+#target_link_libraries(liom_test_node ${PROJECT_NAME})
 
 
 # ========== 安装规则 ==========
@@ -101,8 +109,8 @@ install(TARGETS ${PROJECT_NAME}
   RUNTIME DESTINATION bin
 )
 
-install(TARGETS liom_test_node
-  DESTINATION lib/${PROJECT_NAME})
+#install(TARGETS liom_test_node
+#  DESTINATION lib/${PROJECT_NAME})
 
 install(
   DIRECTORY maps launch rviz

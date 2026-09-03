@@ -11,7 +11,7 @@ def generate_launch_description():
     # 1. 基础路径配置（原有仿真配置）
     # --------------------------
     simulator_package_dir = get_package_share_directory('simulator')
-    yaml_filename = os.path.join(simulator_package_dir, 'maps', 'b.yaml')
+    yaml_filename = os.path.join(simulator_package_dir, 'maps', 'c.yaml')
     rviz_config = os.path.join(simulator_package_dir, 'rviz', 'planner.rviz')
     lifecycle_nodes = ['map_server']
 
@@ -48,10 +48,11 @@ def generate_launch_description():
             output='screen'
         ),
         Node(
-            package='tf2_ros',
-            executable='static_transform_publisher',
-            parameters=[{'use_sim_time': True}],
-            arguments=['0', '0', '0', '0', '0', '0', 'map', 'base_link']
+            package='simulator',
+            executable='transform',
+            parameters=[{'use_sim_time': True},
+                        {'pose_x': 0.0}, {'pose_y': 0.0}, {'pose_yaw': 0.0}],
+            output='screen'
         ),
         Node(
             package='rviz2',

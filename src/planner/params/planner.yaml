@@ -1,11 +1,11 @@
 planner_server:
   ros__parameters:
-    expected_planner_frequency: 20.0
+    expected_planner_frequency: 20.0  # [planner_server-1] [WARN] [1772591565.935934171] [planner_server]: Planner loop missed its desired rate of 20.0000 Hz. Current loop rate is 6.2500 Hz
     use_sim_time: True
     planner_plugins: ["custom"]
     custom:
       plugin: "planner/CustomPlanner"
-      tolerance: 0.5  # 保留：匹配车身尺寸，避免微小偏差导致规划失败
+      tolerance: 0.0  # 保留：匹配车身尺寸，避免微小偏差导致规划失败
       allow_unknown: true  # 保留：适配复杂泊车场景的未知区域
       max_iterations: 1000000  # 保留：复杂泊车需足够迭代次数
       max_planning_time: 5.0  # 保留：平衡规划精度与耗时
@@ -20,9 +20,9 @@ planner_server:
       rotation_penalty: 1.5  # 调整：原5.0过高，过度规避旋转；1.5平衡旋转平滑性与效率
       cache_obstacle_heuristic: true  # 保留：缓存启发式，加速复杂场景规划
       allow_reverse_expansion: true  # 保留：核心参数，确保泊车场景可倒车扩展
-      smooth_path: false  # 保留：后续自行优化路径，符合需求
+      #smooth_path: false  # 保留：后续自行优化路径，符合需求
       motion_model_for_search: "REEDS_SHEPP"  # 保留：启用倒车功能的核心模型
-      angle_quantization_bins: 72  # 新增：每5°一个角度间隔（360/72=5），覆盖±35°转向范围，兼顾精度与效率
+      angle_quantization_bins: 48  # 新增：每5°一个角度间隔（360/48=7.5），覆盖±35°转向范围，兼顾精度与效率
       #downsample_costmap: true  # 新增：开启成本地图降采样，减少计算量
       #downsampling_factor: 2  # 新增：与costmap分辨率匹配，降低处理压力
 
@@ -37,9 +37,11 @@ global_costmap:
       global_frame: map  # 保留：标准全局坐标系
       robot_base_frame: base_link  # 保留：与URDF基准坐标系一致
       use_sim_time: True  # 保留：仿真场景必备
-      #robot_radius: 0.9  # 关键调整：原0.22过小（仅对应车轮半径），正确值=车身半宽（URDF车身宽度1.8m），避免碰撞
-      footprint: "[[-0.929, -0.971], [-0.929, 0.971], [3.76, 0.971], [3.76, -0.971]]"  # 车辆轮廓多边形坐标
-      resolution: 0.05  # 保留：高精度地图，但配合降采样因子2，实际处理分辨率0.1m，兼顾细节与效率
+      #footprint_is_radius: true  # 保留：简化车辆轮廓处理
+      robot_radius: 1.53  # 关键调整：原0.22过小（仅对应车轮半径），正确值=车身半宽（URDF车身宽度1.8m），避免碰撞
+      #footprint: "[[-0.929, -0.971], [-0.929, 0.971], [3.76, 0.971], [3.76, -0.971]]"  # 车辆轮廓多边形坐标
+      #resolution: 0.05  # 保留：高精度地图，但配合降采样因子2，实际处理分辨率0.1m，兼顾细节与效率
+      resolution: 0.5 # 关键调整：原0.05过高，导致计算量过大；0.25配合降采样后实际处理分辨率0.5m，适合泊车场景，提升效率
       track_unknown_space: true  # 保留：适配泊车场景未知区域
       plugins: ["static_layer", "obstacle_layer", "inflation_layer"]  # 保留：标准图层组合
       
@@ -65,7 +67,7 @@ global_costmap:
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 3.0  # 保留：平衡障碍规避与路径紧凑性
-        inflation_radius: 0.95  # 关键调整：原0.55过小，正确值=车身半宽（0.9m）+0.05m安全余量，确保车身不碰障碍
+        inflation_radius: 1.53  # 关键调整：原0.55过小，正确值=车身半宽（0.9m）+0.05m安全余量，确保车身不碰障碍
       
       always_send_full_costmap: True  # 保留：确保全局地图完整传输
 

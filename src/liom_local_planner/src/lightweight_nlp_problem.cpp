@@ -368,6 +368,8 @@ bool LightweightProblem::Solve(
 
     Ipopt::SmartPtr<LiomIPOPTInterface> interface = new LiomIPOPTInterface(w_inf, profile, guess, *config_);
 
+    //app_.Options()->SetIntegerValue("print_level", 5);
+
     auto status = app_.OptimizeTNLP(interface);
     bool nlp_convergence = (status == Ipopt::Solve_Succeeded)
         || (status == Ipopt::Solved_To_Acceptable_Level)
@@ -377,6 +379,13 @@ bool LightweightProblem::Solve(
     if (!nlp_convergence) {
         return false;
     }
+    // bool nlp_convergence = (status == Ipopt::Solve_Succeeded) ||
+    //                     (status == Ipopt::Solved_To_Acceptable_Level);
+    // if (!nlp_convergence) {
+    //     rclcpp::Logger logger = rclcpp::get_logger("lightweight_nlp_problem");
+    //     RCLCPP_ERROR(logger, "IPOPT failed with status %d", status);
+    //     return false;
+    // }
 
     result = ConvertVectorToStates(interface->result_.data(), guess.states.size(), profile.start, profile.goal);
     infeasibility = interface->eval_infeasibility(interface->result_.data());

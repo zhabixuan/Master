@@ -116,6 +116,9 @@ void Plot(const Vector &xs, const Vector &ys, double width,
 
 void PlotPolygon(const Vector &xs, const Vector &ys, double width, Color color, int id,
                  const std::string &ns) {
+  if (xs.empty() || ys.empty()) {
+    return;
+  }
   auto xxs = xs;
   auto yys = ys;
   xxs.push_back(xxs[0]);
@@ -217,12 +220,20 @@ void Delete(int id, const std::string &ns) {
 }
 
 void Trigger() {
-  publisher_->publish(arr_);  // ROS 2发布方式一致（指针调用）
+  if (!publisher_) {
+    arr_.markers.clear();
+    return;
+  }
+  publisher_->publish(arr_);
   arr_.markers.clear();
 }
 
 void Clear(const std::string &ns) {
   arr_.markers.clear();
+
+  if (!publisher_) {
+    return;
+  }
 
   // 修改：ROS 2 MarkerArray和Marker消息类型
   visualization_msgs::msg::MarkerArray arr;

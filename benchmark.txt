@@ -1,0 +1,121 @@
+trajectory_planner(footprint_is_radius = false):
+    example1:
+        angle_quantization_bins: 48
+        downsampling_factor: 2
+        resolution: 0.05
+        max_on_approach_iterations: 1000
+        test: 
+            1: It took 274.814 milliseconds with 97600 iterations.
+            2: It took 163.907 milliseconds with 51732 iterations.
+            3: It took 19.1259 milliseconds with 5959 iterations.
+            4: It took 84.9045 milliseconds with 32495 iterations.
+            5: It took 200.594 milliseconds with 75774 iterations.
+            6: It took 77.2528 milliseconds with 27466 iterations.
+    example2:
+        (简化 Analytic Expansion 的“回溯精修”
+        analytic_expansion.cpp 里有一段最多 8 次、每次回退 5 个父节点的精修循环，计算很重。
+        可以直接删掉这段循环，只保留当前节点的一次 analytic 连接。)
+        angle_quantization_bins: 48
+        downsampling_factor: 2
+        resolution: 0.05
+        max_on_approach_iterations: 1000
+        test: 
+            1: It took 270.267 milliseconds with 97600 iterations.
+            2: It took 92.2937 milliseconds with 28296 iterations.
+            3: It took 13.5032 milliseconds with 3764 iterations.
+            4: It took 74.8719 milliseconds with 30395 iterations.
+            5: It took 152.587 milliseconds with 62615 iterations.
+            6: It took 18.6208 milliseconds with 5305 iterations.
+    example3:
+        (简化 Analytic Expansion 的“回溯精修”
+        analytic_expansion.cpp 里有一段最多 8 次、每次回退 5 个父节点的精修循环，计算很重。
+        可以直接删掉这段循环，只保留当前节点的一次 analytic 连接。)
+        angle_quantization_bins: 48
+        downsampling_factor: 2
+        resolution: 0.25
+        max_on_approach_iterations: 1000
+        test:
+            1: It took 239.252 milliseconds with 84783 iterations.
+            2: It took 81.3633 milliseconds with 28296 iterations.
+            3: It took 19.4926 milliseconds with 5308 iterations.
+            4: It took 65.0071 milliseconds with 23939 iterations.
+            5: It took 162.888 milliseconds with 62615 iterations.
+            6: It took 12.953 milliseconds with 3480 iterations.
+    example4:
+        (简化 Analytic Expansion 的“回溯精修”
+        analytic_expansion.cpp 里有一段最多 8 次、每次回退 5 个父节点的精修循环，计算很重。
+        可以直接删掉这段循环，只保留当前节点的一次 analytic 连接。)
+        angle_quantization_bins: 48
+        downsampling_factor: 2
+        max_on_approach_iterations: 300
+        resolution: 0.05
+        test:
+            1: It took 240.178 milliseconds with 87338 iterations.
+            2: It took 73.2585 milliseconds with 25828 iterations.
+            3: It took 12.2012 milliseconds with 3366 iterations.
+            4: It took 74.0216 milliseconds with 28210 iterations.
+            5: It took 142.508 milliseconds with 58573 iterations.
+            6: It took 11.7914 milliseconds with 3150 iterations.
+    example5:
+        (简化 Analytic Expansion 的“回溯精修”
+        analytic_expansion.cpp 里有一段最多 8 次、每次回退 5 个父节点的精修循环，计算很重。
+        可以直接删掉这段循环，只保留当前节点的一次 analytic 连接。)
+        angle_quantization_bins: 48
+        downsampling_factor: 2
+        max_on_approach_iterations: 100
+        resolution: 0.05
+        test:
+            1: It took 262.882 milliseconds with 84783 iterations.
+            2: It took 141.201 milliseconds with 47593 iterations.
+            3: It took 41.0705 milliseconds with 12012 iterations.
+            4: It took 67.8933 milliseconds with 28903 iterations.
+            5: It took 142.67 milliseconds with 58573 iterations.
+            6: It took 10.2686 milliseconds with 2605 iterations.
+    example6:
+        (若地图较空，可尝试关闭 obstacle heuristic（复杂场景可能反而变慢/变差）)
+        angle_quantization_bins: 48
+        downsampling_factor: 2
+        resolution: 0.05
+        max_on_approach_iterations: 1000
+        test: 
+            1: It took 322.502 milliseconds with 107036 iterations.
+            2: It took 154.549 milliseconds with 48889 iterations.
+            3: It took 16.4347 milliseconds with 3431 iterations.
+            4: It took 199.032 milliseconds with 21418 iterations.
+            5: It took 383.04 milliseconds with 48722 iterations.
+            6: It took 23.3406 milliseconds with 6397 iterations.
+
+trajectory_planner(footprint_is_radius = true):
+    example1: (has dist_heuristic and obstacle heuristic)
+        angle_quantization_bins: 48
+        downsampling_factor: 2
+        resolution: 0.05
+        max_on_approach_iterations: 1000
+        test:
+            1: It took 14.6332 milliseconds with 12039 iterations.
+            2: It took 3.17188 milliseconds with 183 iterations.
+            3: It took 7.97478 milliseconds with 5705 iterations.
+            4: It took 41.4738 milliseconds with 52958 iterations.
+            5: It took 152.04 milliseconds with 145806 iterations.
+            6: It took 26.454 milliseconds with 25192 iterations.
+    example2: (only has obstacle heuristic)
+        angle_quantization_bins: 48
+        downsampling_factor: 2
+        resolution: 0.05
+        max_on_approach_iterations: 1000
+        test:
+            1: It took 11.3213 milliseconds with 5400 iterations.
+            2: It took 3.88628 milliseconds with 136 iterations.
+            3: It took 19.2535 milliseconds with 23045 iterations.
+            4: It took 36.0963 milliseconds with 46128 iterations.
+            5: It took 75.2349 milliseconds with 69422 iterations.
+            6: It took 12.8627 milliseconds with 10696 iterations.
+coarse_path_planner:
+    example1:
+        test:
+            1: It took 12.5549 milliseconds. walked node: 1632
+            2: It took 4.07593 milliseconds. walked node: 92
+            3: It took 7.70509 milliseconds. walked node: 780
+            4: It took 10.8698 milliseconds. walked node: 1634
+            5: It took 8.06725 milliseconds. walked node: 864
+            6: It took 19.3943 milliseconds. walked node: 3536

@@ -1,4 +1,8 @@
-#pragma once
+//#pragma once
+
+#ifndef LIOM_LOCAL_PLANNER_LIGHTWEIGHT_NLP_PROBLEM_H
+#define LIOM_LOCAL_PLANNER_LIGHTWEIGHT_NLP_PROBLEM_H
+
 #include <Eigen/Dense>
 #include <memory>
 #include <utility>
@@ -9,6 +13,7 @@
 #include "liom_local_planner/environment.h"
 
 namespace liom_local_planner {
+namespace math = common::math;
 
 class LightweightProblem: public IOptimizer {
 public:
@@ -43,3 +48,4 @@ private:
 
 
 }
+#endif

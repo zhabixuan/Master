@@ -1,6 +1,6 @@
 
 #include "liom_local_planner/coarse_path_planner.h"
-#include "liom_local_planner/math/math_utils.h"
+#include "common_math/math_utils.h"
 #include "liom_local_planner/time.h"
 #include "liom_local_planner/visualization/plot.h"
 
@@ -97,6 +97,7 @@ bool CoarsePathPlanner::Plan(math::Pose start, math::Pose goal, std::vector<math
         node_opened->second.g_cost = next_node.g_cost;
         node_opened->second.f_cost = next_node.f_cost;
         node_opened->second.pre_index = node.index;
+        open_pq_.emplace(next_node.index, next_node.f_cost); // 重新插入优先队列
       }
     }
   }
@@ -255,6 +256,7 @@ double CoarsePathPlanner::Calculate2DCost(const Node3d &node_3d) {
       else if(expand_node.f_cost < node_opened->second.f_cost) {
         node_opened->second.f_cost = expand_node.f_cost;
         node_opened->second.pre_index = node.index;
+        grid_open_pq_.emplace(expand_node.index, expand_node.f_cost); // 重新插入优先队列
       }
     }
   }
@@ -268,9 +270,9 @@ std::vector<math::Pose> CoarsePathPlanner::GenerateKinematicPath(math::Pose pose
 
   for(int i = 0; i < forward_num_; i++) {
     path[i] = pose;
-    pose.setX(pose.x() + step_size * cos(pose.theta()));
-    pose.setY(pose.y() + step_size * sin(pose.theta()));
-    pose.setTheta(math::NormalizeAngle(pose.theta() + step_size * tan(steering) / config_->vehicle.wheel_base));
+    pose.x = pose.x + step_size * cos(pose.theta);
+    pose.y = pose.y + step_size * sin(pose.theta);
+    pose.theta = (math::NormalizeAngle(pose.theta + step_size * tan(steering) / config_->vehicle.wheel_base));
   }
 
   path[forward_num_] = pose;
@@ -335,9 +337,9 @@ std::vector<math::Pose> InterpolatePath(
   result.resize(sample_count+1);
   for(int i = 0; i < sample_count+1; i++) {
     space->interpolate(start.get(), goal.get(), static_cast<double>(i) / sample_count, first_time, path, state.get());
-    result[i].setX(state[0]);
-    result[i].setY(state[1]);
-    result[i].setTheta(state[2]);
+    result[i].x = state[0];
+    result[i].y = state[1];
+    result[i].theta = state[2];
   }
   return result;
 }
@@ -353,12 +355,12 @@ bool CoarsePathPlanner::GenerateShortestPath(math::Pose start, math::Pose goal, 
   }
 
   ob::ScopedState<ob::SE2StateSpace> rs_start(state_space), rs_goal(state_space);
-  rs_start[0] = start.x();
-  rs_start[1] = start.y();
-  rs_start[2] = start.theta();
-  rs_goal[0] = goal.x();
-  rs_goal[1] = goal.y();
-  rs_goal[2] = goal.theta();
+  rs_start[0] = start.x;
+  rs_start[1] = start.y;
+  rs_start[2] = start.theta;
+  rs_goal[0] = goal.x;
+  rs_goal[1] = goal.y;
+  rs_goal[2] = goal.theta;
 
   if(is_forward_only_) {
     auto ss = std::static_pointer_cast<ob::DubinsStateSpace>(state_space);

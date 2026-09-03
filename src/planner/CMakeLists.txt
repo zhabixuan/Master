@@ -16,7 +16,7 @@ set(CMAKE_BUILD_TYPE Release)
 
 # 依赖查找
 find_package(ament_cmake REQUIRED)
-find_package(path_searching REQUIRED)
+#find_package(trajectory_planner REQUIRED)
 find_package(nav2_msgs REQUIRED)
 find_package(nav2_core REQUIRED)
 find_package(nav2_costmap_2d REQUIRED)
@@ -25,10 +25,12 @@ find_package(nav2_util REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(liom_local_planner REQUIRED)
+find_package(hybrid_Astar REQUIRED)
+find_package(common_math REQUIRED)
 
 # ========== 关键修复3：移除 Eigen3 从 ament 依赖列表 ==========
 set(dependencies
-  path_searching
+  #trajectory_planner
   nav2_msgs
   nav2_core
   nav2_costmap_2d
@@ -36,6 +38,8 @@ set(dependencies
   nav2_util
   tf2
   liom_local_planner
+  hybrid_Astar
+  common_math
 )
 
 # 编译库

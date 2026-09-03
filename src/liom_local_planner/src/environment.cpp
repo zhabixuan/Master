@@ -4,25 +4,38 @@
 
 namespace liom_local_planner {
 
+#define MY_CORRIDOR
+
+Environment::Environment(std::shared_ptr<PlannerConfig> config, 
+            const nav2_costmap_2d::Costmap2D* costmap)
+            : config_(config) {
+    setCostmap(costmap);
+}
 bool Environment::CheckBoxCollision(double time, const math::AABox2d &box) const {
-    // TODO: reimplement using R-Tree
+    
     for (auto& polygon : polygons_) {
         if (polygon.HasOverlap(math::Box2d(box))) {
             return true;
         }
     }
-
-    for (auto& point : points_) {
-        if (box.IsPointIn(point)) {
+    // TODO: reimplement using R-Tree
+    //std::vector<std::pair<Point, size_t>> result;
+    std::vector<Point> result;
+    auto boost_box = boost::geometry::model::box<Point>(
+        Point(box.min_x(), box.min_y()),
+        Point(box.max_x(), box.max_y())
+    );
+    obstacle_tree_.query(bgi::intersects(boost_box), std::back_inserter(result));
+    for (auto& item : result) {
+        if (box.IsPointIn(item)) {
             return true;
         }
     }
-
     return false;
 }
 
 bool Environment::CheckPoseCollision(double time, math::Pose pose) const {
-    auto discs = config_->vehicle.GetDiscPositions(pose.x(), pose.y(), pose.theta());
+    auto discs = config_->vehicle.GetDiscPositions(pose.x, pose.y, pose.theta);
     double wh = config_->vehicle.disc_radius * 2;
     for (size_t i = 0; i < discs.size() / 2; i++) {
         if (CheckBoxCollision(time, math::AABox2d({discs[i * 2], discs[i * 2 + 1]}, wh, wh))) {
@@ -33,22 +46,38 @@ bool Environment::CheckPoseCollision(double time, math::Pose pose) const {
     return false;
 }
 
-void Environment::UpdateCostmapObstacles(const nav2_costmap_2d::Costmap2D *costmap) {
-    points_.clear();
-    for (size_t i = 0; i < costmap->getSizeInCellsX(); i++) {
-        for (size_t j = 0; j < costmap->getSizeInCellsY(); j++) {
-            if (costmap->getCost(i, j) >= nav2_costmap_2d::LETHAL_OBSTACLE) {
+void Environment::UpdateCostmapObstacles() {
+
+    //points_.clear();
+    obstacle_tree_.clear();
+    for (size_t i = 0; i < costmap_->getSizeInCellsX(); i++) {
+        for (size_t j = 0; j < costmap_->getSizeInCellsY(); j++) {
+            if (costmap_->getCost(i, j) >= nav2_costmap_2d::LETHAL_OBSTACLE) {
                 double obs_x, obs_y;
-                costmap->mapToWorld(i, j, obs_x, obs_y);
-                points_.emplace_back(obs_x, obs_y);
+                costmap_->mapToWorld(i, j, obs_x, obs_y);
+                //points_.emplace_back(obs_x, obs_y);
+                //obstacle_tree_.insert(std::make_pair(Point(obs_x, obs_y), points_.size() - 1));
+                obstacle_tree_.insert(Point(obs_x, obs_y));
             }
         }
     }
 }
 
-bool Environment::GenerateCorridorBox(double time, double x, double y, double radius, math::AABox2d& result) const {
+void Environment::setCostmap(const nav2_costmap_2d::Costmap2D *costmap) {
+    costmap_ = costmap;
+    UpdateCostmapObstacles();
+    double min_x = costmap_->getOriginX();
+    double max_x = min_x + (costmap_->getSizeInCellsX() * costmap_->getResolution());
+    double min_y = costmap_->getOriginY();
+    double max_y = min_y + (costmap_->getSizeInCellsY() * costmap_->getResolution());
+    XYbounds_ = {min_x, max_x, min_y, max_y};
+}
+
+// 使用point_而没有用rtree也出现了障碍物进入廊道，应该是rviz自己的显示问题，实际上应该没有障碍物进入廊道
+bool Environment::GenerateCorridorBox(double time, double x, double y, double theta, double radius, math::AABox2d &result) const {
     double ri = radius;
-    math::AABox2d bound({-ri, -ri}, {ri, ri});
+    double d_ri = 2 * ri;
+    math::AABox2d bound({x, y}, d_ri, d_ri);
 
     if (CheckBoxCollision(time, bound)) {
         // initial condition not satisfied, involute to find feasible box
@@ -61,14 +90,15 @@ bool Environment::GenerateCorridorBox(double time, double x, double y, double ra
 
             real_x = x;
             real_y = y;
+            double offset = iter * config_->corridor_search_resolution;
             if (edge == 0) {
-                real_x = x - iter * 0.05;
+                real_x = x - offset;
             } else if (edge == 1) {
-                real_x = x + iter * 0.05;
+                real_x = x + offset;
             } else if (edge == 2) {
-                real_y = y - iter * 0.05;
+                real_y = y - offset;
             } else {
-                real_y = y + iter * 0.05;
+                real_y = y + offset;
             }
 
             inc++;
@@ -84,34 +114,63 @@ bool Environment::GenerateCorridorBox(double time, double x, double y, double ra
 
     int inc = 4;
     std::bitset<4> blocked;
-    double incremental[4] = {0.0, 0.0, 0.0, 0.0}; // left, right, bottom, top
+    //double incremental[4] = {0.0, 0.0, 0.0, 0.0}; // left, down, right, up
+    std::array<double, 4> points = {x - ri, y - ri, x + ri, y + ri};
+    int direction_index = int((theta + M_PI) / (M_PI / 4)) % 8;
+    const int* direction_order = direction_set[direction_index];
+    
     double step = radius * 0.2;
 
     do {
-        int iter = inc / 4;
+        //int iter = inc / 4;
         uint8_t edge = inc % 4;
         inc++;
+        //int dir = edge;
+        int dir = direction_order[edge];
+        if (std::abs(points[dir] - (dir & 1 ? y : x)) + step >= config_->corridor_incremental_limit) {
+            blocked[dir] = true;
+            continue;
+        }
+        if (blocked[dir]) continue;
+        math::Vec2d mid;
+        double len, wid;
+        if (dir == 0) {
+            mid.set_x(points[0] - step / 2.0);  
+            mid.set_y((points[1] + points[3]) / 2.0);
+            len = step;
+            wid = points[3] - points[1];
+        } else if (dir == 1) {
+            mid.set_x((points[2] + points[0]) / 2.0);
+            mid.set_y(points[1] - step / 2.0);
+            len = points[2] - points[0];
+            wid = step;
+        } else if (dir == 2) {
+            mid.set_x(points[2] + step / 2.0);
+            mid.set_y((points[3] + points[1]) / 2.0);
+            len = step;
+            wid = points[3] - points[1];
+        } else {
+            mid.set_x((points[2] + points[0]) / 2.0);
+            mid.set_y(points[3] + step / 2.0);
+            len = points[2] - points[0];
+            wid = step;
+        }
+        math::AABox2d test(mid, len, wid);
 
-        if (blocked[edge]) continue;
-
-        incremental[edge] = iter * step;
-
-        math::AABox2d test({-ri - incremental[0], -ri - incremental[2]},
-                        {ri + incremental[1], ri + incremental[3]});
-
-        if (CheckBoxCollision(time, test.Offset({x, y})) || incremental[edge] >= config_->corridor_incremental_limit) {
-            incremental[edge] -= step;
-            blocked[edge] = true;
+        if (CheckBoxCollision(time, test)) {
+            blocked[dir] = true;
+        } else {
+            points[dir] += (dir / 2 == 0 ? -step : step);
         }
     } while (!blocked.all() && inc <= config_->corridor_max_iter);
     if (inc > config_->corridor_max_iter) {
         return false;
     }
 
-    result = {{x - incremental[0], y - incremental[2]},
-              {x + incremental[1], y + incremental[3]}};
+    // Shrink by ri on each side so the box bounds the disc *center* safe region
+    result = {{points[0] + ri, points[1] + ri},
+              {points[2] - ri, points[3] - ri}};
     return true;
 }
-
 
 }

@@ -7,11 +7,12 @@
       },
       "includePath": [
         "/opt/ros/humble/include/**",
-        "/home/xuan/Desktop/master_thesis/trajectory/src/my_nav2_bringup/include/**",
-        "/home/xuan/Desktop/master_thesis/trajectory/src/path_searching/include/**",
-        "/home/xuan/Desktop/master_thesis/trajectory/src/planner/include/**",
-        "/home/xuan/Desktop/master_thesis/trajectory/src/simulator/include/**",
-        "/home/xuan/Desktop/master_thesis/trajectory/src/liom_local_planner/include/**",
+        "/home/xuan/Desktop/master_thesis/trajectory_hybrid/src/my_nav2_bringup/include/**",
+        "/home/xuan/Desktop/master_thesis/trajectory_hybrid/src/trajectory_planner/include/**",
+        "/home/xuan/Desktop/master_thesis/trajectory_hybrid/src/planner/include/**",
+        "/home/xuan/Desktop/master_thesis/trajectory_hybrid/src/simulator/include/**",
+        "/home/xuan/Desktop/master_thesis/trajectory_hybrid/src/liom_local_planner/include/**",
+        "/home/xuan/Desktop/master_thesis/trajectory_hybrid/src/hybrid_Astar/include/**",
         "/usr/include/**"
       ],
       "name": "ros2",
