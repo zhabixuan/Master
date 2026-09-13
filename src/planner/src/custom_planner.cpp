@@ -16,15 +16,15 @@
   #include <memory>
   #include <vector>
   #include <algorithm>
-  #include <limits>
+  //#include <limits>
 
   #include "Eigen/Core"
   #include "planner/custom_planner.hpp"
 
-  #include <ompl/base/spaces/ReedsSheppStateSpace.h>
-  #include <ompl/base/spaces/DubinsStateSpace.h>
-  #include <ompl/base/ScopedState.h>
-  #include <queue>
+  //#include <ompl/base/spaces/ReedsSheppStateSpace.h>
+  //#include <ompl/base/spaces/DubinsStateSpace.h>
+  //#include <ompl/base/ScopedState.h>
+  //#include <queue>
   #include <tf2/utils.h>
 
   namespace planner
@@ -32,21 +32,21 @@
 
   //#define ROS2_HYBRID_A
   //#define COARSE_PATH_PLANNER
-  #define BENCHMARK_TESTING
+  //#define BENCHMARK_TESTING
 
-  using namespace std::chrono;  // NOLINT
-  using rcl_interfaces::msg::ParameterType;
-  using std::placeholders::_1;
+  //using namespace std::chrono;  // NOLINT
+  //using rcl_interfaces::msg::ParameterType;
+  //using std::placeholders::_1;
 
   namespace llp = liom_local_planner;
-  using liom_local_planner::inf;
+  //using liom_local_planner::inf;
 
   CustomPlanner::CustomPlanner()
-  : _a_star(nullptr),
-    _collision_checker(nullptr, 1, nullptr),
-    //_smoother(nullptr),
-    _costmap(nullptr),
-    _costmap_downsampler(nullptr)
+  //: _a_star(nullptr),
+  //  _collision_checker(nullptr, 1, nullptr),
+  //  //_smoother(nullptr),
+  //  _costmap(nullptr),
+  //  _costmap_downsampler(nullptr)
   {
   }
 
@@ -62,18 +62,19 @@
     std::string name, std::shared_ptr<tf2_ros::Buffer>/*tf*/,
     std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros)
   {
-    _node = parent;
+    //_node = parent;
     auto node = parent.lock();
 
     _logger = node->get_logger();
     _clock = node->get_clock();
     _costmap = costmap_ros->getCostmap();
-    _costmap_ros = costmap_ros;
+    //_costmap_ros = costmap_ros;
     _name = name;
     _global_frame = costmap_ros->getGlobalFrameID();
 
     RCLCPP_INFO(_logger, "Configuring %s of type CustomPlannerHybrid", name.c_str());
 
+    /* ==================== Hybrid A* 参数读取（已弃用，改用 liom_local_planner）====================
     int angle_quantizations;
     double analytic_expansion_max_length_m;
     bool smooth_path;
@@ -192,6 +193,7 @@
         _lookup_table_dim);
       _lookup_table_dim += 1.0;
     }
+    ==================== Hybrid A* 参数读取结束 ==================== */
 
     // visualization
     rclcpp::Node::SharedPtr visualization_node = std::make_shared<rclcpp::Node>("liom_visualization_node");
@@ -204,6 +206,7 @@
     //
     env_ = std::make_shared<llp::Environment>(planner_config_, _costmap);
 
+    /* ==================== Hybrid A* 初始化（已弃用）====================
     // Initialize collision checker
     _collision_checker = hybrid_Astar::GridCollisionChecker(_costmap, _angle_quantizations, node);
     // _collision_checker.setFootprint(
@@ -239,14 +242,11 @@
     }
 
     _raw_plan_publisher = node->create_publisher<nav_msgs::msg::Path>("unsmoothed_plan", 1);
+    ==================== Hybrid A* 初始化结束 ==================== */
 
     RCLCPP_INFO(
-      _logger, "Configured plugin %s of type CustomPlannerHybrid with "
-      "maximum iterations %i, max on approach iterations %i, and %s. Tolerance %.2f."
-      "Using motion model: %s.",
-      _name.c_str(), _max_iterations, _max_on_approach_iterations,
-      _allow_unknown ? "allowing unknown traversal" : "not allowing unknown traversal",
-      _tolerance, toString(_motion_model).c_str());
+      _logger, "Configured plugin %s of type CustomPlannerHybrid (liom_local_planner)",
+      _name.c_str());
   }
 
   void CustomPlanner::activate()
@@ -254,15 +254,13 @@
     RCLCPP_INFO(
       _logger, "Activating plugin %s of type CustomPlannerHybrid",
       _name.c_str());
-    _raw_plan_publisher->on_activate();
-    if (_costmap_downsampler) {
-      _costmap_downsampler->on_activate();
-    }
-
-    auto node = _node.lock();
-    // Add callback for dynamic parameters
-    _dyn_params_handler = node->add_on_set_parameters_callback(
-      std::bind(&CustomPlanner::dynamicParametersCallback, this, _1));
+    // _raw_plan_publisher->on_activate();
+    // if (_costmap_downsampler) {
+    //   _costmap_downsampler->on_activate();
+    // }
+    // auto node = _node.lock();
+    // _dyn_params_handler = node->add_on_set_parameters_callback(
+    //   std::bind(&CustomPlanner::dynamicParametersCallback, this, _1));
     //llp::visualization::on_activate();
   }
 
@@ -271,11 +269,11 @@
     RCLCPP_INFO(
       _logger, "Deactivating plugin %s of type CustomPlannerHybrid",
       _name.c_str());
-    _raw_plan_publisher->on_deactivate();
-    if (_costmap_downsampler) {
-      _costmap_downsampler->on_deactivate();
-    }
-    _dyn_params_handler.reset();
+    // _raw_plan_publisher->on_deactivate();
+    // if (_costmap_downsampler) {
+    //   _costmap_downsampler->on_deactivate();
+    // }
+    // _dyn_params_handler.reset();
     //llp::visualization::on_deactivate();
   }
 
@@ -284,16 +282,17 @@
     RCLCPP_INFO(
       _logger, "Cleaning up plugin %s of type CustomPlannerHybrid",
       _name.c_str());
-    _a_star.reset();
-    //_smoother.reset();
-    if (_costmap_downsampler) {
-      _costmap_downsampler->on_cleanup();
-      _costmap_downsampler.reset();
-    }
-    _raw_plan_publisher.reset();
+    // _a_star.reset();
+    // //_smoother.reset();
+    // if (_costmap_downsampler) {
+    //   _costmap_downsampler->on_cleanup();
+    //   _costmap_downsampler.reset();
+    // }
+    // _raw_plan_publisher.reset();
     llp::visualization::on_cleanup();
   }
 
+  /* ==================== Hybrid A* createPlan（已弃用，改用 liom_local_planner）====================
   #ifdef ROS2_HYBRID_A
   nav_msgs::msg::Path CustomPlanner::createPlan(
     const geometry_msgs::msg::PoseStamped & start,
@@ -474,8 +473,9 @@
     RCLCPP_INFO(_logger, "path.size() is %ld", plan.poses.size());
     return plan;
   }
+  ==================== Hybrid A* / 粗路径 createPlan 结束 ==================== */
 
-  #else 
+  // liom_local_planner 版本的 createPlan（当前使用）
   nav_msgs::msg::Path CustomPlanner::createPlan(
     const geometry_msgs::msg::PoseStamped & start,
     const geometry_msgs::msg::PoseStamped & goal)
@@ -539,7 +539,7 @@
     }
 
   }
-  #endif
+  //#endif
 void CustomPlanner::interpolatePathByTime(
     const llp::FullStates& solution,
     std::vector<llp::TrajectoryPoint>& interpolated_states,
@@ -847,6 +847,7 @@ void CustomPlanner::interpolatePathByTime(
 
 
 
+  /* ==================== 动态参数回调（已弃用，Hybrid A* 专用）====================
   rcl_interfaces::msg::SetParametersResult
   CustomPlanner::dynamicParametersCallback(std::vector<rclcpp::Parameter> parameters)
   {
@@ -1027,6 +1028,7 @@ void CustomPlanner::interpolatePathByTime(
     result.successful = true;
     return result;
   }
+  ==================== 动态参数回调结束 ==================== */
 
   }  // namespace planner
 

@@ -9,10 +9,10 @@
 // //#include "trajectory_planner/smoother.hpp"
 // #include "trajectory_planner/utils.hpp"
 // #include "trajectory_planner/costmap_downsampler.hpp"
-#include "hybrid_Astar/a_star.hpp"
+//#include "hybrid_Astar/a_star.hpp"
 //#include "hybrid_Astar/smoother.hpp"
 #include "hybrid_Astar/utils.hpp"
-#include "hybrid_Astar/costmap_downsampler.hpp"
+//#include "hybrid_Astar/costmap_downsampler.hpp"
 
 // liom
 //#include "liom_local_planner/coarse_path_planner.h"
@@ -90,15 +90,15 @@ public:
     const geometry_msgs::msg::PoseStamped & start,
     const geometry_msgs::msg::PoseStamped & goal) override;
 
-  bool coarsePlan(
-    const common::math::Pose & start,
-    const common::math::Pose & goal,
-    std::vector<common::math::Pose> & path);
+  // bool coarsePlan(
+  //   const common::math::Pose & start,
+  //   const common::math::Pose & goal,
+  //   std::vector<common::math::Pose> & path);
 
-  bool liomPlan(const liom_local_planner::FullStates &prev_sol, 
-  const liom_local_planner::TrajectoryPoint &start, 
-  const liom_local_planner::TrajectoryPoint &goal, 
-  liom_local_planner::FullStates &result);
+  // bool liomPlan(const liom_local_planner::FullStates &prev_sol,
+  // const liom_local_planner::TrajectoryPoint &start,
+  // const liom_local_planner::TrajectoryPoint &goal,
+  // liom_local_planner::FullStates &result);
 
   /**
    * @brief 基于弧长的路径插值
@@ -112,46 +112,46 @@ public:
     double dt = 0.05);
 
 protected:
-  /**
-   * @brief Callback executed when a paramter change is detected
-   * @param parameters list of changed parameters
-   */
-  rcl_interfaces::msg::SetParametersResult
-  dynamicParametersCallback(std::vector<rclcpp::Parameter> parameters);
+  // /**
+  //  * @brief Callback executed when a paramter change is detected
+  //  * @param parameters list of changed parameters
+  //  */
+  // rcl_interfaces::msg::SetParametersResult
+  // dynamicParametersCallback(std::vector<rclcpp::Parameter> parameters);
 
-  std::unique_ptr<hybrid_Astar::AStarAlgorithm<hybrid_Astar::NodeHybrid>> _a_star;
+  // ==================== Hybrid A* 成员（已弃用，改用 liom_local_planner）====================
+  // std::unique_ptr<hybrid_Astar::AStarAlgorithm<hybrid_Astar::NodeHybrid>> _a_star;
+  // hybrid_Astar::GridCollisionChecker _collision_checker;
+  // std::unique_ptr<hybrid_Astar::Smoother> _smoother;
+  // std::unique_ptr<hybrid_Astar::CostmapDownsampler> _costmap_downsampler;
+  // std::shared_ptr<nav2_costmap_2d::Costmap2DROS> _costmap_ros;
+  // float _lookup_table_dim;
+  // float _tolerance;
+  // bool _downsample_costmap;
+  // int _downsampling_factor;
+  // double _angle_bin_size;
+  // unsigned int _angle_quantizations;
+  // bool _allow_unknown;
+  // int _max_iterations;
+  // int _max_on_approach_iterations;
+  // hybrid_Astar::SearchInfo _search_info;
+  // double _max_planning_time;
+  // double _lookup_table_size;
+  // double _minimum_turning_radius_global_coords;
+  // std::string _motion_model_for_search;
+  // hybrid_Astar::MotionModel _motion_model;
+  // rclcpp_lifecycle::LifecyclePublisher<nav_msgs::msg::Path>::SharedPtr _raw_plan_publisher;
+  // std::mutex _mutex;
+  // rclcpp_lifecycle::LifecycleNode::WeakPtr _node;
+  // rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr _dyn_params_handler;
+  // ==================== Hybrid A* 成员结束 ====================
+
+  // liom_local_planner
   std::unique_ptr<liom_local_planner::LiomLocalPlanner> _liom_local_planner;
-  //std::unique_ptr<liom_local_planner::LiomLocalPlanner> _liom_local_planner;
-  hybrid_Astar::GridCollisionChecker _collision_checker;
-  //std::unique_ptr<hybrid_Astar::Smoother> _smoother;
   rclcpp::Clock::SharedPtr _clock;
   rclcpp::Logger _logger{rclcpp::get_logger("SmacPlannerHybrid")};
   nav2_costmap_2d::Costmap2D * _costmap;
-  std::shared_ptr<nav2_costmap_2d::Costmap2DROS> _costmap_ros;
-  std::unique_ptr<hybrid_Astar::CostmapDownsampler> _costmap_downsampler;
   std::string _global_frame, _name;
-  float _lookup_table_dim;
-  float _tolerance;
-  bool _downsample_costmap;
-  int _downsampling_factor;
-  double _angle_bin_size;
-  unsigned int _angle_quantizations;
-  bool _allow_unknown;
-  int _max_iterations;
-  int _max_on_approach_iterations;
-  hybrid_Astar::SearchInfo _search_info;
-  double _max_planning_time;
-  double _lookup_table_size;
-  double _minimum_turning_radius_global_coords;
-  std::string _motion_model_for_search;
-  hybrid_Astar::MotionModel _motion_model;
-  rclcpp_lifecycle::LifecyclePublisher<nav_msgs::msg::Path>::SharedPtr _raw_plan_publisher;
-  std::mutex _mutex;
-  rclcpp_lifecycle::LifecycleNode::WeakPtr _node;
-
-  // Dynamic parameters handler
-  rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr _dyn_params_handler;
-
 
   std::shared_ptr<liom_local_planner::PlannerConfig> planner_config_;
   std::shared_ptr<liom_local_planner::Environment> env_;
