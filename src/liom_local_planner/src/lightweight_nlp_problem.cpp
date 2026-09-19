@@ -1,3 +1,5 @@
+#include <cmath>
+
 #include <adolc/adolc.h>
 #include <adolc/adolc_sparse.h>
 #include <coin/IpTNLP.hpp>
@@ -91,43 +93,68 @@ virtual bool get_starting_point(Ipopt::Index n, bool init_x, Ipopt::Number* x,
     for(int i = 0; i < nrows_; i++) {
         x0_state_mat.row(i) = guess_.states[i+1].vec();
 
-        auto x0_disc = config_.vehicle.GetDiscPositions(guess_.states[i+1].x, guess_.states[i+1].y, guess_.states[i+1].theta);
-        x0_disc_mat.row(i) = Eigen::Map<Eigen::VectorXd>(x0_disc.data(), x0_disc.size());
+        const auto &st = guess_.states[i+1];
+        const double c = std::cos(st.theta);
+        const double s = std::sin(st.theta);
+        for (int j = 0; j < config_.vehicle.n_disc; j++) {
+            x0_disc_mat(i, 2 * j)     = st.x + config_.vehicle.disc_coefficients[j] * c;
+            x0_disc_mat(i, 2 * j + 1) = st.y + config_.vehicle.disc_coefficients[j] * s;
+        }
     }
 
     return true;
 }
 
 template<class T> T eval_infeasibility(const T *x) {
-    T dt = x[0] / nfe_;
+    // The chain start -> state_1 -> ... -> state_{nfe-2} -> goal contains
+    // (nfe_ - 1) forward-Euler steps, so the step size is T/(nfe_ - 1), not
+    // T/nfe_ (the latter is an off-by-one that shrinks the true horizon).
+    T dt = x[0] / (nfe_ - 1);
 
-    T infeasibility = 0.0;
-    infeasibility += pow(x[1 + (0) * nrows_ + 0] - profile_.start.x - dt * profile_.start.v * cos(profile_.start.theta), 2)
-                        + pow(x[1 + (1) * nrows_ + 0] - profile_.start.y - dt * profile_.start.v * sin(profile_.start.theta), 2)
-                        + pow(x[1 + (2) * nrows_ + 0] - profile_.start.theta - dt * profile_.start.v * tan(profile_.start.phi) / config_.vehicle.wheel_base, 2)
-                        + pow(x[1 + (3) * nrows_ + 0] - profile_.start.v - dt * profile_.start.a, 2)
-                        + pow(x[1 + (4) * nrows_ + 0] - profile_.start.phi - dt * profile_.start.omega, 2);
+    // Squared residuals of the discretized bicycle kinematics. Writing each
+    // square as d*d instead of pow(d, 2) keeps the ADOL-C tape free of the
+    // pow/exp/log opcodes and halves the active operations per term.
+    T d_x   = x[1 + 0 * nrows_ + 0] - profile_.start.x - dt * profile_.start.v * cos(profile_.start.theta);
+    T d_y   = x[1 + 1 * nrows_ + 0] - profile_.start.y - dt * profile_.start.v * sin(profile_.start.theta);
+    T d_th  = x[1 + 2 * nrows_ + 0] - profile_.start.theta - dt * profile_.start.v * tan(profile_.start.phi) / config_.vehicle.wheel_base;
+    T d_v   = x[1 + 3 * nrows_ + 0] - profile_.start.v - dt * profile_.start.a;
+    T d_phi = x[1 + 4 * nrows_ + 0] - profile_.start.phi - dt * profile_.start.omega;
+    T infeasibility = d_x*d_x + d_y*d_y + d_th*d_th + d_v*d_v + d_phi*d_phi;
 
     for(int i = 1; i < nrows_; i++) {
-        infeasibility += pow(x[1 + (0) * nrows_ + i] - x[1 + (0) * nrows_ + i-1] - dt * x[1 + (3) * nrows_ + i-1] * cos(x[1 + (2) * nrows_ + i-1]), 2)
-                        + pow(x[1 + (1) * nrows_ + i] - x[1 + (1) * nrows_ + i-1] - dt * x[1 + (3) * nrows_ + i-1] * sin(x[1 + (2) * nrows_ + i-1]), 2)
-                        + pow(x[1 + (2) * nrows_ + i] - x[1 + (2) * nrows_ + i-1] - dt * x[1 + (3) * nrows_ + i-1] * tan(x[1 + (4) * nrows_ + i-1]) / config_.vehicle.wheel_base, 2)
-                        + pow(x[1 + (3) * nrows_ + i] - x[1 + (3) * nrows_ + i-1] - dt * x[1 + (5) * nrows_ + i-1], 2)
-                        + pow(x[1 + (4) * nrows_ + i] - x[1 + (4) * nrows_ + i-1] - dt * x[1 + (6) * nrows_ + i-1], 2);
+        const T v_prev  = x[1 + 3 * nrows_ + i-1];
+        const T th_prev = x[1 + 2 * nrows_ + i-1];
+        d_x   = x[1 + 0 * nrows_ + i] - x[1 + 0 * nrows_ + i-1] - dt * v_prev * cos(th_prev);
+        d_y   = x[1 + 1 * nrows_ + i] - x[1 + 1 * nrows_ + i-1] - dt * v_prev * sin(th_prev);
+        d_th  = x[1 + 2 * nrows_ + i] - th_prev - dt * v_prev * tan(x[1 + 4 * nrows_ + i-1]) / config_.vehicle.wheel_base;
+        d_v   = x[1 + 3 * nrows_ + i] - v_prev - dt * x[1 + 5 * nrows_ + i-1];
+        d_phi = x[1 + 4 * nrows_ + i] - x[1 + 4 * nrows_ + i-1] - dt * x[1 + 6 * nrows_ + i-1];
+        infeasibility += d_x*d_x + d_y*d_y + d_th*d_th + d_v*d_v + d_phi*d_phi;
     }
 
-    infeasibility += pow(profile_.goal.x - x[1 + (0) * nrows_ + nrows_-1] - dt * x[1 + (3) * nrows_ + nrows_-1] * cos(x[1 + (2) * nrows_ + nrows_-1]), 2)
-                        + pow(profile_.goal.y - x[1 + (1) * nrows_ + nrows_-1] - dt * x[1 + (3) * nrows_ + nrows_-1] * sin(x[1 + (2) * nrows_ + nrows_-1]), 2)
-                        + pow(x[nvar_ - 1] - x[1 + (2) * nrows_ + nrows_-1] - dt * x[1 + (3) * nrows_ + nrows_-1] * tan(x[1 + (4) * nrows_ + nrows_-1]) / config_.vehicle.wheel_base, 2)
-                        + pow(profile_.goal.v - x[1 + (3) * nrows_ + nrows_-1] - dt * x[1 + (5) * nrows_ + nrows_-1], 2)
-                        + pow(profile_.goal.phi - x[1 + (4) * nrows_ + nrows_-1] - dt * x[1 + (6) * nrows_ + nrows_-1], 2);
+    const T v_last  = x[1 + 3 * nrows_ + nrows_-1];
+    const T th_last = x[1 + 2 * nrows_ + nrows_-1];
+    const T phi_last = x[1 + 4 * nrows_ + nrows_-1];
+    const T c_last = cos(th_last);
+    const T s_last = sin(th_last);
+    d_x   = profile_.goal.x - x[1 + 0 * nrows_ + nrows_-1] - dt * v_last * c_last;
+    d_y   = profile_.goal.y - x[1 + 1 * nrows_ + nrows_-1] - dt * v_last * s_last;
+    d_th  = x[nvar_ - 1] - th_last - dt * v_last * tan(phi_last) / config_.vehicle.wheel_base;
+    d_v   = profile_.goal.v - v_last - dt * x[1 + 5 * nrows_ + nrows_-1];
+    d_phi = profile_.goal.phi - phi_last - dt * x[1 + 6 * nrows_ + nrows_-1];
+    infeasibility += d_x*d_x + d_y*d_y + d_th*d_th + d_v*d_v + d_phi*d_phi;
 
-    infeasibility += pow(sin(profile_.goal.theta) - sin(x[nvar_ - 1]), 2) + pow(cos(profile_.goal.theta) - cos(x[nvar_ - 1]), 2);
+    const T d_sin = sin(profile_.goal.theta) - sin(x[nvar_ - 1]);
+    const T d_cos = cos(profile_.goal.theta) - cos(x[nvar_ - 1]);
+    infeasibility += d_sin*d_sin + d_cos*d_cos;
 
     for(int i = 0; i < nrows_; i++) {
+        const T c = cos(x[1 + 2 * nrows_ + i]);
+        const T s = sin(x[1 + 2 * nrows_ + i]);
         for (int j = 0; j < config_.vehicle.n_disc; j++) {
-        infeasibility += pow(x[1 + (NVar + j * 2) * nrows_ + i] - x[1 + (0) * nrows_ + i] - config_.vehicle.disc_coefficients[j] * cos(x[1 + (2) * nrows_ + i]), 2)
-                            + pow(x[1 + (NVar + j * 2 + 1) * nrows_ + i] - x[1 + (1) * nrows_ + i] - config_.vehicle.disc_coefficients[j] * sin(x[1 + (2) * nrows_ + i]), 2);
+            d_x = x[1 + (NVar + j * 2) * nrows_ + i] - x[1 + 0 * nrows_ + i] - config_.vehicle.disc_coefficients[j] * c;
+            d_y = x[1 + (NVar + j * 2 + 1) * nrows_ + i] - x[1 + 1 * nrows_ + i] - config_.vehicle.disc_coefficients[j] * s;
+            infeasibility += d_x*d_x + d_y*d_y;
         }
     }
 
@@ -135,11 +162,17 @@ template<class T> T eval_infeasibility(const T *x) {
 }
 
 template<class T> bool eval_obj(Ipopt::Index n, const T *x, T& obj_value) {
+    (void)n;
     obj_value = x[0];
 
+    // Paper Eq. (10): the comfort term is a² + v²·ω² (the yaw penalty is
+    // speed-weighted). The original code dropped the v² factor.
     for(int i = 0; i < nrows_; i++) {
-        obj_value += config_.opti_w_a * x[1 + 5 * nrows_ + i] * x[1 + 5 * nrows_ + i]
-            + config_.opti_w_omega * x[1 + 6 * nrows_ + i] * x[1 + 6 * nrows_ + i];
+        const T v = x[1 + 3 * nrows_ + i];
+        const T a = x[1 + 5 * nrows_ + i];
+        const T omega = x[1 + 6 * nrows_ + i];
+        obj_value += config_.opti_w_a * a * a
+            + config_.opti_w_omega * v * v * omega * omega;
     }
 
     obj_value += w_inf_ * eval_infeasibility(x);
@@ -147,6 +180,7 @@ template<class T> bool eval_obj(Ipopt::Index n, const T *x, T& obj_value) {
 }
 
 template<class T> bool eval_constraints(Ipopt::Index n, const T *x, Ipopt::Index m, T *g) {
+    (void)n; (void)x; (void)m; (void)g;  // m == 0: no hard constraints
     return true;
 }
 
@@ -218,6 +252,8 @@ virtual void finalize_solution(Ipopt::SolverReturn status,
                                 Ipopt::Number obj_value,
                                 const Ipopt::IpoptData* ip_data,
                                 Ipopt::IpoptCalculatedQuantities* ip_cq) {
+    (void)status; (void)z_L; (void)z_U; (void)m; (void)g; (void)lambda;
+    (void)obj_value; (void)ip_data; (void)ip_cq;
     std::copy(x, x + n, result_.data());
 
     delete[] obj_lam;
@@ -390,10 +426,9 @@ bool LightweightProblem::Solve(
     result = ConvertVectorToStates(interface->result_.data(), guess.states.size(), profile.start, profile.goal);
     infeasibility = interface->eval_infeasibility(interface->result_.data());
 
-    std::cout << "wall_t: " << GetCurrentTimestamp() - solver_st
-    << ", status: " << status
-    << ", infeasibility: " << infeasibility
-    << ", tf: " << result.tf << std::endl;
+    RCLCPP_INFO(rclcpp::get_logger("lightweight_nlp_problem"),
+        "wall_t: %.3f, status: %d, infeasibility: %.6f, tf: %.3f",
+        GetCurrentTimestamp() - solver_st, static_cast<int>(status), infeasibility, result.tf);
 
     return true;
 }

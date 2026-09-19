@@ -1,6 +1,7 @@
 #include "liom_local_planner/environment.h"
 #include "nav2_costmap_2d/cost_values.hpp"
 #include <bitset>
+#include <cmath>
 
 namespace liom_local_planner {
 
@@ -12,37 +13,36 @@ Environment::Environment(std::shared_ptr<PlannerConfig> config,
     setCostmap(costmap);
 }
 bool Environment::CheckBoxCollision(double time, const math::AABox2d &box) const {
-    
+
     for (auto& polygon : polygons_) {
         if (polygon.HasOverlap(math::Box2d(box))) {
             return true;
         }
     }
-    // TODO: reimplement using R-Tree
-    //std::vector<std::pair<Point, size_t>> result;
-    std::vector<Point> result;
-    auto boost_box = boost::geometry::model::box<Point>(
+
+    // Query the obstacle-cell R-tree with early exit. `bgi::intersects` already
+    // performs the exact point-in-box test, so the iterator is non-end iff a
+    // lethal cell center lies inside the query box — no result container and no
+    // second IsPointIn pass are needed.
+    const auto query_box = boost::geometry::model::box<Point>(
         Point(box.min_x(), box.min_y()),
-        Point(box.max_x(), box.max_y())
-    );
-    obstacle_tree_.query(bgi::intersects(boost_box), std::back_inserter(result));
-    for (auto& item : result) {
-        if (box.IsPointIn(item)) {
-            return true;
-        }
-    }
-    return false;
+        Point(box.max_x(), box.max_y()));
+    const auto predicate = bgi::intersects(query_box);
+    return obstacle_tree_.qbegin(predicate) != obstacle_tree_.qend();
 }
 
-bool Environment::CheckPoseCollision(double time, math::Pose pose) const {
-    auto discs = config_->vehicle.GetDiscPositions(pose.x, pose.y, pose.theta);
-    double wh = config_->vehicle.disc_radius * 2;
-    for (size_t i = 0; i < discs.size() / 2; i++) {
-        if (CheckBoxCollision(time, math::AABox2d({discs[i * 2], discs[i * 2 + 1]}, wh, wh))) {
+bool Environment::CheckPoseCollision(double time, const math::Pose &pose) const {
+    const auto &coeffs = config_->vehicle.disc_coefficients;
+    const double c = std::cos(pose.theta);
+    const double s = std::sin(pose.theta);
+    const double wh = config_->vehicle.disc_radius * 2;
+    for (int i = 0; i < config_->vehicle.n_disc; i++) {
+        const math::Vec2d center(pose.x + coeffs[i] * c, pose.y + coeffs[i] * s);
+        if (CheckBoxCollision(time, math::AABox2d(center, wh, wh))) {
             return true;
         }
     }
-    
+
     return false;
 }
 

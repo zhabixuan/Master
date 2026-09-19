@@ -32,7 +32,7 @@ public:
 
   std::vector<common::math::Polygon2d> &polygons() { return polygons_; }
 
-  bool CheckPoseCollision(double time, common::math::Pose pose) const;
+  bool CheckPoseCollision(double time, const common::math::Pose& pose) const;
 
   //bool GenerateCorridorBox(double time, double x, double y, double radius, math::AABox2d &result) const;
   bool GenerateCorridorBox(double time, double x, double y, double theta, double radius, common::math::AABox2d &result) const;

@@ -1,5 +1,8 @@
 #include <rclcpp/rclcpp.hpp>
 
+#include <cmath>
+#include <cstdint>
+
 #include "liom_local_planner/time.h"
 #include "liom_local_planner/liom_local_planner.h"
 #include "liom_local_planner/lightweight_nlp_problem.h"
@@ -70,55 +73,27 @@ bool LiomLocalPlanner::CheckGuessFeasibility(const FullStates &guess) {
   return true;
 }
 
-bool LiomLocalPlanner::Plan(const FullStates &prev_sol, const TrajectoryPoint &start, const TrajectoryPoint &goal, FullStates &result) {
+bool LiomLocalPlanner::BuildCorridors(const FullStates &guess, Constraints &constraints) const {
   rclcpp::Logger logger = rclcpp::get_logger("liom_local_planner");
+  // Clear the corridor markers from the previous iteration before re-paving.
   visualization::Clear("Corridor 0");
   visualization::Clear("Corridor 1");
-  FullStates guess = StitchPreviousSolution(prev_sol, start);
-  if(!CheckGuessFeasibility(guess)) {
-    std::vector<math::Pose> initial_path;
-    double st = GetCurrentTimestamp();
-    if(!coarse_path_planner_.Plan(start.pose(), goal.pose(), initial_path)) {
-      RCLCPP_ERROR(logger, "re-plan coarse path failed!");
-      return false;
-    }
-    guess = GenerateGuessFromPath(initial_path, start);
-    // if (!CheckGuessFeasibility(guess)) {
-    //   RCLCPP_ERROR(logger, "interpolated guess has collision!");
-    //   return false;
-    // }
-    RCLCPP_INFO(logger, "coarse path generation time: %f", GetCurrentTimestamp() - st);
 
-    std::vector<double> xs, ys;
-    for(auto &pose: initial_path) {
-      xs.push_back(pose.x); ys.push_back(pose.y);
-    }
-
-    RCLCPP_INFO(logger, "Calling visualization::Plot...");
-    visualization::Plot(xs, ys, 0.1, visualization::Color::Yellow, 1, "Coarse Path");
-    RCLCPP_INFO(logger, "Calling visualization::Trigger...");
-    visualization::Trigger();
-    RCLCPP_INFO(logger, "coarse path had published!---------------");
-  }
-
-  Constraints constraints;
-  constraints.start = start;
-  constraints.goal = goal;
-
-  int disc_nvar = config_->vehicle.n_disc * 2;
+  const int disc_nvar = config_->vehicle.n_disc * 2;
   constraints.corridor_lb.setConstant(guess.states.size(), disc_nvar, -inf);
   constraints.corridor_ub.setConstant(guess.states.size(), disc_nvar, inf);
   for(size_t i = 0; i < guess.states.size(); i++) {
-    auto disc_pos = config_->vehicle.GetDiscPositions(guess.states[i].x, guess.states[i].y, guess.states[i].theta);
+    const double c = std::cos(guess.states[i].theta);
+    const double s = std::sin(guess.states[i].theta);
 
     for(int j = 0; j < config_->vehicle.n_disc; j++) {
+      const double disc_x = guess.states[i].x + config_->vehicle.disc_coefficients[j] * c;
+      const double disc_y = guess.states[i].y + config_->vehicle.disc_coefficients[j] * s;
       math::AABox2d box;
-      //if (!env_->GenerateCorridorBox(0.0, disc_pos[j*2], disc_pos[j*2+1], config_->vehicle.disc_radius, box)) {
-      if (!env_->GenerateCorridorBox(0.0, disc_pos[j*2], disc_pos[j*2+1], guess.states[i].theta, config_->vehicle.disc_radius, box)) {
+      if (!env_->GenerateCorridorBox(0.0, disc_x, disc_y, guess.states[i].theta, config_->vehicle.disc_radius, box)) {
         RCLCPP_ERROR(logger, "%d th corridor box indexed at %zu generation failed!", j, i);
         return false;
       }
-      RCLCPP_INFO(logger, "%d th corridor box indexed at %zu generation had generated!", j, i);
       auto color = visualization::Color::Green;
       color.set_alpha(0.1);
       visualization::PlotPolygon(math::Polygon2d(math::Box2d(box)), 0.05, color, i, "Corridor " + std::to_string(j));
@@ -131,24 +106,77 @@ bool LiomLocalPlanner::Plan(const FullStates &prev_sol, const TrajectoryPoint &s
   }
 
   visualization::Trigger();
+  return true;
+}
 
-  RCLCPP_INFO(logger, "All corridor boxs has been pulished!");
+bool LiomLocalPlanner::Plan(const FullStates &prev_sol, const TrajectoryPoint &start, const TrajectoryPoint &goal, FullStates &result) {
+  rclcpp::Logger logger = rclcpp::get_logger("liom_local_planner");
+  FullStates guess = StitchPreviousSolution(prev_sol, start);
+  // A stitched suffix that is too short would leave the NLP with an invalid
+  // number of interior collocation points (nrows_ <= 0); fall back to a full
+  // re-plan via hybrid A* in that case.
+  if(!CheckGuessFeasibility(guess) || guess.states.size() < static_cast<size_t>(config_->min_nfe)) {
+    std::vector<math::Pose> initial_path;
+    double st = GetCurrentTimestamp();
+    if(!coarse_path_planner_.Plan(start.pose(), goal.pose(), initial_path)) {
+      RCLCPP_ERROR(logger, "re-plan coarse path failed!");
+      return false;
+    }
+    guess = GenerateGuessFromPath(initial_path, start);
+    RCLCPP_INFO(logger, "coarse path generation time: %f", GetCurrentTimestamp() - st);
 
-  double infeasibility;
-  if(!problem_->Solve(config_->opti_w_penalty0, constraints, guess, result, infeasibility)) {
-    RCLCPP_ERROR(logger, "solver failed!");
-    return false;
+    std::vector<double> xs, ys;
+    xs.reserve(initial_path.size());
+    ys.reserve(initial_path.size());
+    for(auto &pose: initial_path) {
+      xs.push_back(pose.x); ys.push_back(pose.y);
+    }
+    visualization::Plot(xs, ys, 0.1, visualization::Color::Yellow, 1, "Coarse Path");
+    visualization::Trigger();
   }
-  RCLCPP_INFO(logger, "solver successed and result has been generated");
-  if(infeasibility > config_->opti_varepsilon_tol) {
-    RCLCPP_WARN(logger, "infeasibility = %.6f > %.6f, trajectory may not be feasible", infeasibility, config_->opti_varepsilon_tol);
+
+  Constraints constraints;
+  constraints.start = start;
+  constraints.goal = goal;
+
+  // Lightweight iterative framework (paper Alg. 3). A single "build corridor
+  // once and solve once" pass is the STC method, which the paper proves to be
+  // unreliable whenever the initial guess is poor (corridors leave out free
+  // space, or don't cover any kinematically feasible trajectory). Rebuilding
+  // the corridors from the latest solution and warm-starting the OCP recovers
+  // from a bad initial guess — this is the root cause of the sporadic
+  // "hybrid A* succeeds but IPOPT fails / result is poor" behavior.
+  double infeasibility = inf;
+  bool converged = false;
+  for (int iter = 0; iter < config_->opti_iter_max; iter++) {
+    if (!BuildCorridors(guess, constraints)) {
+      RCLCPP_ERROR(logger, "corridor generation failed at iteration %d", iter);
+      return false;
+    }
+    if (!problem_->Solve(config_->opti_w_penalty0, constraints, guess, result, infeasibility)) {
+      RCLCPP_ERROR(logger, "solver failed at iteration %d!", iter);
+      return false;
+    }
+    RCLCPP_INFO(logger, "iteration %d: infeasibility = %.6f", iter, infeasibility);
+    if (infeasibility <= config_->opti_varepsilon_tol) {
+      converged = true;
+      break;
+    }
+    guess = result;  // warm-start the next iteration with the current solution
+  }
+
+  if (converged) {
+    RCLCPP_INFO(logger, "solver converged: infeasibility = %.6f <= %.6f", infeasibility, config_->opti_varepsilon_tol);
+  } else {
+    RCLCPP_WARN(logger, "infeasibility = %.6f > %.6f after %d iterations, trajectory may not be feasible",
+                infeasibility, config_->opti_varepsilon_tol, config_->opti_iter_max);
   }
 
   return true;
 }
 
 FullStates LiomLocalPlanner::ResamplePath(const std::vector<math::Pose> &path) const {
-  std::vector<bool> gears(path.size());
+  std::vector<uint8_t> gears(path.size());
   std::vector<double> stations(path.size(), 0);
 
   for(size_t i = 0; i < path.size() - 1; i++) {
@@ -161,7 +189,8 @@ FullStates LiomLocalPlanner::ResamplePath(const std::vector<math::Pose> &path) c
   }
 
   if (gears.size() > 1) {
-    gears.back() = gears[gears.size() - 2];
+    const size_t last = gears.size() - 1;
+    gears[last] = gears[last - 1];
   }
 
   // if(gears.size() > 1) {
@@ -200,23 +229,33 @@ FullStates LiomLocalPlanner::ResamplePath(const std::vector<math::Pose> &path) c
   auto interp_x = math::Interpolate1d(time_profile, prev_x, interpolated_ticks);
   auto interp_y = math::Interpolate1d(time_profile, prev_y, interpolated_ticks);
   auto interp_theta = math::ToContinuousAngle(math::Interpolate1d(time_profile, prev_theta, interpolated_ticks));
-  for(size_t i = 0; i < nfe; i++) {
+  for(int i = 0; i < nfe; i++) {
     result.states[i].x = interp_x[i];
     result.states[i].y = interp_y[i];
     result.states[i].theta = interp_theta[i];
   }
 
   double dt = interpolated_ticks[1] - interpolated_ticks[0];
-  for(size_t i = 0; i < nfe-1; i++) {
+  for(int i = 0; i < nfe - 1; i++) {
     double tracking_angle = atan2(result.states[i+1].y - result.states[i].y, result.states[i+1].x - result.states[i].x);
     bool gear = std::abs(math::NormalizeAngle(tracking_angle - result.states[i].theta)) < M_PI_2;
     double velocity = hypot(result.states[i+1].y - result.states[i].y, result.states[i+1].x - result.states[i].x) / dt;
 
     result.states[i].v = std::min(config_->vehicle.max_velocity, std::max(-config_->vehicle.max_velocity, gear ? velocity : -velocity));
-    result.states[i].phi = std::min(config_->vehicle.phi_max, std::max(-config_->vehicle.phi_max, atan((result.states[i+1].theta - result.states[i].theta) * config_->vehicle.wheel_base / (result.states[i].v * dt))));
+
+    // Guard the kinematic relation θ̇ = v·tanφ/LW against v ≈ 0 (cusps / gear
+    // changes). A zero velocity would otherwise make the argument ±inf/NaN and
+    // poison the IPOPT starting point (the sporadic solver failures).
+    if (std::abs(result.states[i].v) > 1e-6) {
+      result.states[i].phi = std::min(config_->vehicle.phi_max,
+          std::max(-config_->vehicle.phi_max,
+              std::atan((result.states[i+1].theta - result.states[i].theta) * config_->vehicle.wheel_base / (result.states[i].v * dt))));
+    } else {
+      result.states[i].phi = 0.0;
+    }
   }
 
-  for(size_t i = 0; i < nfe-1; i++) {
+  for(int i = 0; i < nfe - 1; i++) {
     result.states[i].a = std::min(config_->vehicle.max_acceleration, std::max(-config_->vehicle.max_acceleration, (result.states[i+1].v - result.states[i].v) / dt));
     result.states[i].omega = std::min(config_->vehicle.omega_max, std::max(-config_->vehicle.omega_max, (result.states[i+1].phi - result.states[i].phi) / dt));
   }
@@ -269,7 +308,7 @@ std::vector<double> LiomLocalPlanner::GenerateOptimalTimeProfileSegment(const st
 
   std::vector<double> time_profile(N, start_time);
 
-  for (size_t i = 1; i < N; ++i) {
+  for (int i = 1; i < N; ++i) {
     double v = (profile[i] + profile[i-1]) / 2.0; // 使用平均速度计算时间增量
     if (v < 1e-6) { // 避免除以零
       time_profile[i] = time_profile[i-1];
@@ -278,46 +317,6 @@ std::vector<double> LiomLocalPlanner::GenerateOptimalTimeProfileSegment(const st
     }
   }
   return time_profile;
-  // int accel_idx = 0, decel_idx = stations.size()-1;
-  // double vi = 0.0;
-  // std::vector<double> profile(stations.size());
-  // for (int i = 0; i < stations.size()-1; i++) {
-  //   double ds = stations[i+1] - stations[i];
-
-  //   profile[i] = vi;
-  //   vi = sqrt(vi * vi + 2 * max_accel * ds);
-  //   vi = std::min(max_velocity, std::max(min_velocity, vi));
-
-  //   if(vi >= max_velocity) {
-  //     accel_idx = i+1;
-  //     break;
-  //   }
-  // }
-
-  // vi = 0.0;
-  // for (int i = stations.size()-1; i > accel_idx; i--) {
-  //   double ds = stations[i] - stations[i-1];
-  //   profile[i] = vi;
-  //   vi = sqrt(vi * vi - 2 * max_decel * ds);
-  //   vi = std::min(max_velocity, std::max(min_velocity, vi));
-
-  //   if(vi >= max_velocity) {
-  //     decel_idx = i;
-  //     break;
-  //   }
-  // }
-
-  //std::fill(std::next(profile.begin(), accel_idx), std::next(profile.begin(), decel_idx), max_velocity);
-
-  // std::vector<double> time_profile(stations.size(), start_time);
-  // for(size_t i = 1; i < stations.size(); i++) {
-  //   if(profile[i] < 1e-6) {
-  //     time_profile[i] = time_profile[i-1];
-  //     continue;
-  //   }
-  //   time_profile[i] = time_profile[i-1] + (stations[i] - stations[i-1]) / profile[i];
-  // }
-  // return time_profile;
 }
 
 

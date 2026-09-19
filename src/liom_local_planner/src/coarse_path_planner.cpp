@@ -38,6 +38,7 @@ bool CoarsePathPlanner::Plan(math::Pose start, math::Pose goal, std::vector<math
 
     double dist_start_to_goal = start.DistanceTo(goal);
     uint64_t oneshot_index = undefined_index;
+    uint64_t final_index = undefined_index;
     std::vector<math::Pose> oneshot_path;
     int walked_node_count = 0;
 
@@ -49,7 +50,11 @@ bool CoarsePathPlanner::Plan(math::Pose start, math::Pose goal, std::vector<math
     auto node_index = open_pq_.top().first;
     open_pq_.pop();
 
-    auto &node = open_set_.at(node_index);
+    auto node_it = open_set_.find(node_index);
+    if(node_it == open_set_.end() || node_it->second.is_closed) {
+      continue; // 惰性删除：跳过堆里已关闭/过期的条目
+    }
+    auto &node = node_it->second;
     node.is_closed = true;
 
 #ifdef VISUALIZE_NODE_EXPANSION
@@ -58,7 +63,7 @@ bool CoarsePathPlanner::Plan(math::Pose start, math::Pose goal, std::vector<math
 #endif
 
     if(node_index == goal_node.index) {
-      goal_node.pre_index = node.pre_index;
+      final_index = node_index;
       break;
     }
 
@@ -97,6 +102,8 @@ bool CoarsePathPlanner::Plan(math::Pose start, math::Pose goal, std::vector<math
         node_opened->second.g_cost = next_node.g_cost;
         node_opened->second.f_cost = next_node.f_cost;
         node_opened->second.pre_index = node.index;
+        node_opened->second.steering = next_node.steering;
+        node_opened->second.is_forward = next_node.is_forward;
         open_pq_.emplace(next_node.index, next_node.f_cost); // 重新插入优先队列
       }
     }
@@ -105,8 +112,8 @@ bool CoarsePathPlanner::Plan(math::Pose start, math::Pose goal, std::vector<math
   if(oneshot_index != undefined_index) { // successful oneshot
     result = TraversePath(oneshot_index);
     result.insert(result.end(), oneshot_path.begin(), oneshot_path.end());
-  } else if(goal_node.pre_index != undefined_index) { // traversed to goal node (unlikely)
-    result = TraversePath(goal_node.index);
+  } else if(final_index != undefined_index) { // traversed to goal node (unlikely)
+    result = TraversePath(final_index);
   } else {
     return false;
   }
@@ -157,6 +164,7 @@ std::vector<math::Pose> CoarsePathPlanner::TraversePath(uint64_t node_index) {
     uint64_t pre_index = node.pre_index;
     auto pre_node = open_set_.find(pre_index);
     if(pre_node == open_set_.end()) {
+      result.push_back(node.pose); // 补上起点
       break;
     }
 
@@ -221,6 +229,9 @@ double CoarsePathPlanner::Calculate2DCost(const Node3d &node_3d) {
     grid_open_pq_.pop();
 
     auto &node = grid_open_set_.at(node_index);
+    if(node.is_closed) {
+      continue; // 惰性删除：跳过堆里已关闭的过期条目
+    }
     node.is_closed = true;
 
     if(node_index == node_2d.index) {

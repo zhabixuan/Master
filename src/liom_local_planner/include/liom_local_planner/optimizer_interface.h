@@ -61,6 +61,7 @@ public:
   IOptimizer(std::shared_ptr<PlannerConfig> config, std::shared_ptr<Environment> env): config_(std::move(config)), env_(std::move(env)) {}
 
   virtual bool Solve(double w_inf, const Constraints &profile, const FullStates &guess, FullStates &result, double &infeasibility) {
+    (void)w_inf; (void)profile; (void)guess; (void)result; (void)infeasibility;
     return false;
   }
 

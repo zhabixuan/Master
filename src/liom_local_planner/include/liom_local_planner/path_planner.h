@@ -64,31 +64,18 @@ private:
     struct Node2d {
         int x_grid, y_grid;
         uint64_t index = 0;
-        std::shared_ptr<Node2d> pre_node = nullptr;
         double f_cost = inf;
-        // bool is_closed = false;
 
-        Node2d(math::Pose ps, const std::vector<double>& XYbounds, const PlannerConfig& config) {
-            x_grid = static_cast<int>((ps.x - XYbounds[0]) / config.grid_xy_resolution);
-            y_grid = static_cast<int>((ps.y - XYbounds[2]) / config.grid_xy_resolution);
+        static uint64_t GridIndex(int x_grid, int y_grid);
+        static uint64_t GridIndex(math::Pose ps, const std::vector<double>& XYbounds, const PlannerConfig& config);
+        static math::AABox2d GenerateBox(int x_grid, int y_grid, const std::vector<double>& XYbounds, const PlannerConfig& config);
 
-            assert(abs(x_grid) < (1 << 30) && abs(y_grid) < (1 << 30));
-            static constexpr int64_t kOffset = 1LL << 30;
-            uint64_t ux = static_cast<uint64_t>(static_cast<int64_t>(x_grid) + kOffset);
-            uint64_t uy = static_cast<uint64_t>(static_cast<int64_t>(y_grid) + kOffset);
-            index = (ux << 32) | uy;
-        }
+        Node2d(math::Pose ps, const std::vector<double>& XYbounds, const PlannerConfig& config)
+            : Node2d(static_cast<int>((ps.x - XYbounds[0]) / config.grid_xy_resolution),
+                     static_cast<int>((ps.y - XYbounds[2]) / config.grid_xy_resolution)) {}
 
         Node2d(int x_grd, int y_grd) : x_grid(x_grd), y_grid(y_grd) {
-            static constexpr int64_t kOffset = 1LL << 30;
-            uint64_t ux = static_cast<uint64_t>(static_cast<int64_t>(x_grd) + kOffset);
-            uint64_t uy = static_cast<uint64_t>(static_cast<int64_t>(y_grd) + kOffset);
-            index = (ux << 32) | uy;
-        }
-
-        inline math::AABox2d GenerateBox(const std::vector<double>& XYbounds, const PlannerConfig& config) const {
-            math::Vec2d corner(XYbounds[0] + config.grid_xy_resolution * x_grid, XYbounds[2] + config.grid_xy_resolution * y_grid);
-            return { corner, config.vehicle.disc_radius * 2, config.vehicle.disc_radius * 2 };
+            index = GridIndex(x_grd, y_grd);
         }
     };
 
@@ -124,11 +111,11 @@ private:
 
     bool ExpandNextNode(std::shared_ptr<Node3d> node, int next_index, std::shared_ptr<Node3d>& next_node);
 
-    double EvaluateExpandCost(std::shared_ptr<Node3d> currend_node, std::shared_ptr<Node3d> next_node);
+    double EvaluateExpandCost(std::shared_ptr<Node3d> current_node, std::shared_ptr<Node3d> next_node);
 
     double EstimateHeuristicCost(std::shared_ptr<Node3d> node);
 
-    bool GridCheckConstraints(std::shared_ptr<Node2d> node);
+    bool GridCellCollides(int x_grid, int y_grid) const;
 
     double Calculate2DCost(std::shared_ptr<Node3d> node);
 

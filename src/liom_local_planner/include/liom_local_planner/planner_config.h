@@ -60,6 +60,11 @@ struct PlannerConfig {
   //int opti_inner_iter_max = 1000;
 
   /**
+   * maximum iteration count for the iterative corridor-refinement loop (Alg. 3)
+   */
+  int opti_iter_max = 5;
+
+  /**
    * Initial value of weighting parameter w_penalty
    */
   double opti_w_penalty0 = 1e4;

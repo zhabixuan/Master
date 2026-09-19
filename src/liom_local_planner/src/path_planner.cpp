@@ -1,20 +1,37 @@
 
 #include "liom_local_planner/path_planner.h"
 #include "common_math/math_utils.h"
-#include "liom_local_planner/time.h"
-#include "liom_local_planner/visualization/plot.h"
 
 #include <ompl/base/spaces/ReedsSheppStateSpace.h>
 #include <ompl/base/spaces/DubinsStateSpace.h>
 #include <ompl/base/ScopedState.h>
-#include <queue>
 
-//#define VISUALIZE_NODE_EXPANSION
-//#define VISUALIZE_GRID_MAP
+#include <algorithm>
+#include <cstdlib>
+#include <queue>
 
 namespace liom_local_planner {
 
 constexpr int min_oneshot_freq = 2, max_oneshot_freq = 100;
+
+uint64_t PathPlanner::Node2d::GridIndex(int x_grid, int y_grid) {
+    static constexpr int64_t kOffset = 1LL << 30;
+    assert(std::abs(x_grid) < (1LL << 30) && std::abs(y_grid) < (1LL << 30));
+    uint64_t ux = static_cast<uint64_t>(static_cast<int64_t>(x_grid) + kOffset);
+    uint64_t uy = static_cast<uint64_t>(static_cast<int64_t>(y_grid) + kOffset);
+    return (ux << 32) | uy;
+}
+
+uint64_t PathPlanner::Node2d::GridIndex(math::Pose ps, const std::vector<double>& XYbounds, const PlannerConfig& config) {
+    return GridIndex(static_cast<int>((ps.x - XYbounds[0]) / config.grid_xy_resolution),
+                     static_cast<int>((ps.y - XYbounds[2]) / config.grid_xy_resolution));
+}
+
+math::AABox2d PathPlanner::Node2d::GenerateBox(int x_grid, int y_grid, const std::vector<double>& XYbounds, const PlannerConfig& config) {
+    math::Vec2d corner(XYbounds[0] + config.grid_xy_resolution * x_grid,
+                       XYbounds[2] + config.grid_xy_resolution * y_grid);
+    return { corner, config.vehicle.disc_radius * 2, config.vehicle.disc_radius * 2 };
+}
 
 PathPlanner::PathPlanner(
         std::shared_ptr<PlannerConfig> config,
@@ -73,11 +90,7 @@ bool PathPlanner::Plan(math::Pose start, math::Pose goal, std::vector<math::Pose
 
     static constexpr int kMaxNodeNum = 200000;
     size_t explored_node_num = 0;
-    // size_t available_result_num = 0;
-    auto best_explored_num = explored_node_num;
-    // auto best_available_result_num = available_result_num;
     size_t max_explored_num = 1000000;
-    // size_t desired_explored_num = std::min(100000, static_cast<int>(max_explored_num));
 
     double dist_start_to_goal = start.DistanceTo(goal);
     std::shared_ptr<Node3d> oneshot_node = nullptr;
@@ -95,8 +108,12 @@ bool PathPlanner::Plan(math::Pose start, math::Pose goal, std::vector<math::Pose
       }
       closed_set_.emplace(current_node->index, current_node);
       explored_node_num++;
-      double scaled_heu_cost = (current_node->f_cost - current_node->g_cost) / dist_start_to_goal;
-      int oneshot_freq = static_cast<int>(min_oneshot_freq + scaled_heu_cost * (max_oneshot_freq - min_oneshot_freq));
+      double scaled_heu_cost = dist_start_to_goal > 1e-6
+          ? (current_node->f_cost - current_node->g_cost) / dist_start_to_goal
+          : 1.0;
+      int oneshot_freq = static_cast<int>(std::clamp(
+          min_oneshot_freq + scaled_heu_cost * (max_oneshot_freq - min_oneshot_freq),
+          static_cast<double>(min_oneshot_freq), static_cast<double>(max_oneshot_freq)));
       if (explored_node_num % oneshot_freq == 0) {
         if (CheckOneshotPath(current_node, goal_node, oneshot_path)) {
           oneshot_node = current_node;
@@ -115,9 +132,6 @@ bool PathPlanner::Plan(math::Pose start, math::Pose goal, std::vector<math::Pose
           continue;
         }
         if (closed_set_.count(next_node->index) > 0) {
-          continue;
-        }
-        if (env_->CheckPoseCollision(0.0, next_node->pose)) {
           continue;
         }
         next_node->set_cost(
@@ -141,14 +155,6 @@ bool PathPlanner::Plan(math::Pose start, math::Pose goal, std::vector<math::Pose
     }
 
 
-#ifdef VISUALIZE_NODE_EXPANSION
-  std::vector<double> expand_x, expand_y;
-#endif
-
-#ifdef VISUALIZE_NODE_EXPANSION
-    expand_x.push_back(node.pose.x());
-    expand_y.push_back(node.pose.y());
-#endif
   if (oneshot_node != nullptr) {
     result = TraversePath(oneshot_node);
     result.insert(result.end(), oneshot_path.begin(), oneshot_path.end());
@@ -157,36 +163,6 @@ bool PathPlanner::Plan(math::Pose start, math::Pose goal, std::vector<math::Pose
   } else {
     return false;
   }
-
-#ifdef VISUALIZE_NODE_EXPANSION
-  std::vector<visualization::Color> expand_colors;
-  for(int i = 0; i < expand_x.size(); i++) {
-    auto color = visualization::Color::fromHSV(120 + 120.0 * i / (expand_x.size() - 1), 1.0, 1.0);
-    expand_colors.push_back(color);
-  }
-
-  visualization::PlotPoints(expand_x, expand_y, expand_colors, 0.1, 1, "Expand Points");
-  visualization::Trigger();
-#endif
-
-#ifdef VISUALIZE_GRID_MAP
-  std::vector<double> grid_x, grid_y, grid_cost;
-  for(auto &pair: grid_open_set_) {
-    if (pair.second.is_closed && pair.second.f_cost < inf) {
-      grid_x.push_back(origin_.x() + pair.second.x_grid * config_->grid_xy_resolution);
-      grid_y.push_back(origin_.y() + pair.second.y_grid * config_->grid_xy_resolution);
-      grid_cost.push_back(pair.second.f_cost);
-    }
-  }
-
-  std::vector<visualization::Color> grid_colors;
-  double grid_max_cost = *std::max_element(grid_cost.begin(), grid_cost.end());
-  for(double cost : grid_cost) {
-    grid_colors.push_back(visualization::Color::fromHSV(120.0 + 120.0 * cost / grid_max_cost, 1.0, 1.0));
-  }
-  visualization::PlotPoints(grid_x, grid_y, grid_colors, config_->grid_xy_resolution, 1, "Grid Map");
-  visualization::Trigger();
-#endif
 
   std::cout << "walked node: " << explored_node_num << std::endl;
 
@@ -213,18 +189,18 @@ std::vector<math::Pose> PathPlanner::TraversePath(std::shared_ptr<Node3d> curren
   return result;
 }
 
-double PathPlanner::EvaluateExpandCost(std::shared_ptr<Node3d> currend_node, std::shared_ptr<Node3d> next_node) {
+double PathPlanner::EvaluateExpandCost(std::shared_ptr<Node3d> current_node, std::shared_ptr<Node3d> next_node) {
   double piecewise_cost = 0.0;
   if (next_node->is_forward) {
     piecewise_cost += static_cast<double>(forward_num_) * config_->step_size * config_->forward_penalty;
   } else {
     piecewise_cost += static_cast<double>(forward_num_) * config_->step_size * config_->backward_penalty;
   }
-  if (currend_node->is_forward != next_node->is_forward) {
+  if (current_node->is_forward != next_node->is_forward) {
     piecewise_cost += config_->gear_change_penalty;
   }
   piecewise_cost += config_->steering_penalty * std::abs(next_node->steering);
-  piecewise_cost += config_->steering_change_penalty * std::abs(next_node->steering - currend_node->steering);
+  piecewise_cost += config_->steering_change_penalty * std::abs(next_node->steering - current_node->steering);
   return piecewise_cost;
 }
 
@@ -240,64 +216,67 @@ constexpr double grid_direction_costs[8] = {
     1, M_SQRT2, 1, M_SQRT2, 1, M_SQRT2, 1, M_SQRT2
 };
 
-bool PathPlanner::GridCheckConstraints(std::shared_ptr<Node2d> node) {
-  const double node_grid_x = node->x_grid;
-  const double node_grid_y = node->y_grid;
-  if (node_grid_x > max_grid_x_ ||
-      node_grid_x < 0  ||
-      node_grid_y > max_grid_y_ ||
-      node_grid_y < 0) {
-    return false;
+bool PathPlanner::GridCellCollides(int x_grid, int y_grid) const {
+  if (x_grid < 0 || x_grid > max_grid_x_ || y_grid < 0 || y_grid > max_grid_y_) {
+    return true;
   }
-  if (env_->CheckBoxCollision(0.0, node->GenerateBox(XYbounds_, *config_))) {
-    return false;
-  }
-  return true;
+  return env_->CheckBoxCollision(0.0, Node2d::GenerateBox(x_grid, y_grid, XYbounds_, *config_));
 }
 
 double PathPlanner::Calculate2DCost(std::shared_ptr<Node3d> node_3d) {
-  std::shared_ptr<Node2d> node_2d = std::make_shared<Node2d>(node_3d->pose, XYbounds_, *config_);
-  auto closed_node = grid_closed_set_.find(node_2d->index);
+  const uint64_t target_index = Node2d::GridIndex(node_3d->pose, XYbounds_, *config_);
+
+  auto closed_node = grid_closed_set_.find(target_index);
   if (closed_node != grid_closed_set_.end()) {
     return closed_node->second->f_cost * config_->grid_xy_resolution;
   }
 
-  // Grid a star begins
-  while(!grid_open_pq_.empty()) {
+  // Incremental 2D Dijkstra propagating from the goal; continue where the
+  // previous call left off until the target grid cell is settled.
+  while (!grid_open_pq_.empty()) {
     const uint64_t current_index = grid_open_pq_.top().first;
     grid_open_pq_.pop();
-    std::shared_ptr<Node2d> current_node = grid_open_set_[current_index];
-    if (grid_closed_set_.count(current_node->index) > 0) {
-      continue;
+    auto current_it = grid_open_set_.find(current_index);
+    if (current_it == grid_open_set_.end()) {
+      continue;  // stale entry already settled
     }
-    grid_closed_set_.emplace(current_node->index, current_node);
-    int current_node_x = current_node->x_grid;
-    int current_node_y = current_node->y_grid;
-    double current_node_f_cost = current_node->f_cost;
+    std::shared_ptr<Node2d> current_node = current_it->second;
+    grid_open_set_.erase(current_it);
+    grid_closed_set_.emplace(current_index, current_node);
+
+    const int current_node_x = current_node->x_grid;
+    const int current_node_y = current_node->y_grid;
+    const double current_node_f_cost = current_node->f_cost;
+
     for (int i = 0; i < 8; ++i) {
-      std::shared_ptr<Node2d> next_node = 
-          std::make_shared<Node2d>(current_node_x + grid_directions[i][0], current_node_y + grid_directions[i][1]);
-      next_node->f_cost = current_node->f_cost + grid_direction_costs[i];
-      if (!GridCheckConstraints(next_node)) {
+      const int next_x = current_node_x + grid_directions[i][0];
+      const int next_y = current_node_y + grid_directions[i][1];
+      if (next_x < 0 || next_x > max_grid_x_ || next_y < 0 || next_y > max_grid_y_) {
         continue;
       }
-      if (grid_closed_set_.find(next_node->index) != grid_closed_set_.end()) {
+      const uint64_t next_index = Node2d::GridIndex(next_x, next_y);
+      if (grid_closed_set_.count(next_index) > 0) {
         continue;
       }
-      auto opened_node = grid_open_set_.find(next_node->index);
-      if (opened_node == grid_open_set_.end()) {
-        next_node->pre_node = current_node;
-        grid_open_set_.emplace(next_node->index, next_node);
-        grid_open_pq_.emplace(next_node->index, next_node->f_cost);
-      } else {
-        if (opened_node->second->f_cost > next_node->f_cost) {
-          opened_node->second->f_cost = next_node->f_cost;
-          opened_node->second->pre_node = current_node;
-          grid_open_pq_.emplace(next_node->index, next_node->f_cost);
+      const double next_f_cost = current_node_f_cost + grid_direction_costs[i];
+      auto opened_it = grid_open_set_.find(next_index);
+      if (opened_it != grid_open_set_.end()) {
+        if (opened_it->second->f_cost > next_f_cost) {
+          opened_it->second->f_cost = next_f_cost;
+          grid_open_pq_.emplace(next_index, next_f_cost);
         }
+        continue;
       }
+      if (GridCellCollides(next_x, next_y)) {
+        continue;
+      }
+      auto next_node = std::make_shared<Node2d>(next_x, next_y);
+      next_node->f_cost = next_f_cost;
+      grid_open_set_.emplace(next_index, next_node);
+      grid_open_pq_.emplace(next_index, next_f_cost);
     }
-    if (current_index == node_2d->index) {
+
+    if (current_index == target_index) {
       return current_node_f_cost * config_->grid_xy_resolution;
     }
   }
@@ -307,16 +286,18 @@ double PathPlanner::Calculate2DCost(std::shared_ptr<Node3d> node_3d) {
 
 std::vector<math::Pose> PathPlanner::GenerateKinematicPath(math::Pose last_pose, bool is_forward, double steering) const {
   std::vector<math::Pose> path(forward_num_ + 1);
-  double step_size = is_forward ? config_->step_size : -config_->step_size;
+  const double step_size = is_forward ? config_->step_size : -config_->step_size;
+  const double dtheta = step_size / config_->vehicle.wheel_base * std::tan(steering);
 
   path[0] = last_pose;
-  for(int i = 0; i < forward_num_; i++) {
-    math::Pose next_pose;
-    next_pose.theta = last_pose.theta + step_size / config_->vehicle.wheel_base * std::tan(steering);
-    next_pose.x = last_pose.x + step_size * std::cos((last_pose.theta + next_pose.theta) / 2.0);
-    next_pose.y = last_pose.y + step_size * std::sin((last_pose.theta + next_pose.theta) / 2.0);
-    path[i + 1] = {next_pose.x, next_pose.y, math::NormalizeAngle(next_pose.theta)};
-    last_pose = next_pose;
+  for (int i = 0; i < forward_num_; i++) {
+    const double last_theta = last_pose.theta;
+    const double next_theta = last_theta + dtheta;
+    const double mid_theta = (last_theta + next_theta) / 2.0;
+    last_pose.x += step_size * std::cos(mid_theta);
+    last_pose.y += step_size * std::sin(mid_theta);
+    last_pose.theta = math::NormalizeAngle(next_theta);
+    path[i + 1] = last_pose;
   }
 
   return path;

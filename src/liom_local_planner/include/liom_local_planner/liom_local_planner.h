@@ -34,6 +34,8 @@ public:
 
   bool CheckGuessFeasibility(const FullStates &guess);
 
+  bool BuildCorridors(const FullStates &guess, Constraints &constraints) const;
+
   FullStates StitchPreviousSolution(const FullStates &solution, const TrajectoryPoint &start);
 
   FullStates GenerateGuessFromPath(const std::vector<math::Pose> &path, const TrajectoryPoint &start);
